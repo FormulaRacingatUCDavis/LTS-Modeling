@@ -57,7 +57,8 @@ title( 'Racing Line' )
 subplot(1,2,2)
 hold on;
 
-Histogram = histogram( abs(Spline.Radius), 0:5:200, 'Normalization', 'Probability' );
+Histogram = histogram( abs(Spline.Radius), 0:2.5:200, ...
+    'Normalization', 'Probability' );
 
 title( ['Distribution of Turning Radius: ', ...
     num2str( 100 * (1 - sum( Histogram.Values ) ), 4 ), '% > 200 [m]' ] )
@@ -104,7 +105,7 @@ function [Points, Spline] = CreateTrack( Image, Scale )
             addlistener( PointRoI(end), 'ROIMoved', @ControlPointMoved );
 
             if size(Points.Pixels,1) > 5
-                Spline = SplineGeneration( Points.Pixels(2:end,:), Image, Scale );
+                Spline = SplineGeneration( Points.Pixels(2:end,:), Scale );
 
                 delete( findobj( 'Color', 'b', 'LineStyle', '--' ) );
                 plot( Spline.Pixels(:,1), Spline.Pixels(:,2), 'b--' );
@@ -116,7 +117,7 @@ function [Points, Spline] = CreateTrack( Image, Scale )
         Points.Pixels( str2double(Source.Label), : ) = Source.Position;
         
         if size(Points.Pixels,1) > 5
-            Spline = SplineGeneration( Points.Pixels(2:end,:), Image, Scale );
+            Spline = SplineGeneration( Points.Pixels(2:end,:), Scale );
 
             delete( findobj( 'Color', 'b', 'LineStyle', '--' ) );
             plot( Spline.Pixels(:,1), Spline.Pixels(:,2), 'b--' );
@@ -124,7 +125,7 @@ function [Points, Spline] = CreateTrack( Image, Scale )
     end
 end
 
-function Spline = SplineGeneration( Points, Image, Scale )
+function Spline = SplineGeneration( Points, Scale )
     % Compute Control Derivatives
     D = zeros( size(Points) ); 
     for j = 1 : size(Points,2)
@@ -132,13 +133,9 @@ function Spline = SplineGeneration( Points, Image, Scale )
             diag(   ones( size(Points,1)-1,1 ),-1) + ...
             diag(   ones( size(Points,1)-1,1 ), 1);
         
-        if regexp( Image.File, '*Endurance' )
-            A(1  ,1) = 4;   A(1  ,end) = 1;
-            A(end,1) = 1;   A(end,end) = 4;
-        else
-            A(1  ,1  ) = 2;
-            A(end,end) = 2;
-        end
+        A(1  ,1  ) = 2;
+        A(end,end) = 2;
+        
         
         b          = zeros( size(Points,1),1 );
         b(1)       = 3*( Points(2    ,j) - Points(1      ,j) );
