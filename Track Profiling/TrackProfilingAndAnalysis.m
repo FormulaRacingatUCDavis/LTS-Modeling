@@ -166,8 +166,8 @@ function Spline = SplineGeneration( Points, Image, Scale )
         ci = 2.*Spline.Coeff.c(i,:) + 6.*Spline.Coeff.d(i,:) .* u;
         
         Spline.Pixels = [Spline.Pixels; pi];
-        d = [d; di];
-        c = [c; ci];
+        d = [d; di]; %#ok<AGROW>
+        c = [c; ci]; %#ok<AGROW>
     end
     
     Spline.Length = Spline.Pixels .* Scale.Ratio;
