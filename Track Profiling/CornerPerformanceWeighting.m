@@ -41,14 +41,16 @@ for i = 1 : length(Endurance)
     EnduranceBinVals = EnduranceBinVals + ...
         Endurance(i).Histogram.BinCounts ./ length(Endurance(i).Histogram.Data); 
 end
-EnduranceBinVals = EnduranceBinVals .* 275;
+EnduranceBinVals = EnduranceBinVals .* 275 / length( Endurance );
+EnduranceStr = 275 - sum( EnduranceBinVals );
 
 AutoXBinVals = 0;
 for i = 1 : length(AutoX)
     AutoXBinVals = AutoXBinVals + ...
         AutoX(i).Histogram.BinCounts ./ length(AutoX(i).Histogram.Data); 
 end
-AutoXBinVals = AutoXBinVals .* 125;
+AutoXBinVals = AutoXBinVals .* 125 / length( AutoX );
+AutoXStr = 125 - sum( AutoXBinVals );
 
 SkidpadBinVals = zeros( size(AutoXBinVals) );
 SkidpadBinVals( find( 18.25/2 < BinEdges, 1 ) - 1 ) = 75;
@@ -65,7 +67,9 @@ histogram( 'BinEdges', BinEdges, 'BinCount', EnduranceBinVals, ...
 plot( [4.5, 4.5], [0 80], 'k--' );
 plot( [75 , 75 ], [0 80], 'k--' );
 
-ylabel( 'Associated Points []' )
-xlabel( 'Cornering Radius [m]' )
+title( ['Point Distribution on Cornering Radii: ', ...
+    num2str( AutoXStr+EnduranceStr+100, 3), ' Points for Straights (> 200 [m])'] ) 
+ylabel( 'Associated Points [pts]' ); ylim([0 80]);
+xlabel( 'Cornering Radius [m]' ); xlim([0, 200]);
 
-ylim([0 80])
+legend( {'Skidpad', 'Autocross', 'Endurance'} );
