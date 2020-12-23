@@ -43,31 +43,37 @@ end
 clear File
 
 %% Plotting
-Figure = figure;
-sgtitle( [strrep(Image.File(1:end-4),'_','-'), ' Analysis'] )
+Figure = figure( 'WindowState', 'Maximized' );
+sgtitle( [strrep(Image.File(1:end-4),'_',' '), ' Analysis'] )
 subplot(1,2,1)
 hold on;
 
 imshow( Image.Raw )
-plot( Points.Pixels(:,1), Points.Pixels(:,2), 'rx')
-plot( Spline.Pixels(:,1), Spline.Pixels(:,2), 'b' )
+plot( Points.Pixels(:,1), Points.Pixels(:,2), 'rx', 'MarkerSize', 6 )
+plot( Spline.Pixels(:,1), Spline.Pixels(:,2), 'r' )
 
 title( 'Racing Line' )
 
 subplot(1,2,2)
 hold on;
 
-Histogram = histogram( abs(Spline.Radius), 0:5:100, 'Normalization', 'Probability' );
+Histogram = histogram( abs(Spline.Radius), 0:5:200, 'Normalization', 'Probability' );
 
 title( ['Distribution of Turning Radius: ', ...
-    num2str( 100 * (1 - sum( Histogram.Values ) ), 4 ), '% > 100 [m]' ] )
+    num2str( 100 * (1 - sum( Histogram.Values ) ), 4 ), '% > 200 [m]' ] )
 xlabel( 'Turning Radius [m]' )
 ylabel( 'Probability [ ]' )
 
 %% Save Results
 save( [fileparts( which( 'TrackProfilingAndAnalysis.m' ) ), '\Analyses\' ...
-    strrep( Image.File(1:end-4), ' ', '_' ) ] );
-   
+    strrep( Image.File(1:end-4), ' ', '_' ) ], ...
+    'Histogram', 'Image', 'Points', 'Scale', 'Spline' );
+
+saveas( Figure, [fileparts( which( 'TrackProfilingAndAnalysis.m' ) ), '\Analyses\' ...
+    strrep( Image.File(1:end-4), ' ', '_' ) ], 'png' )
+
+Figure.WindowState = 'normal';
+
 %% Local Functions
 function [Points, Spline] = CreateTrack( Image, Scale )
     Figure = figure( 'WindowButtonDownFcn', @AddControlPoint );
