@@ -25,7 +25,7 @@ else
     %% Image Scaling
     Scale.Figure = figure;
     imshow( Image.Raw )
-    title( 'Draw the Scaling Line' )
+    title( 'Draw the Scaling Line (Click & Drag)' )
 
     Scale.Bar = drawline;
     Scale.Mask = createMask( Scale.Bar );
@@ -66,13 +66,14 @@ ylabel( 'Probability [ ]' )
 
 %% Save Results
 save( [fileparts( which( 'TrackProfilingAndAnalysis.m' ) ), '\Analyses\' ...
-       strrep( Image.File(1:end-4), ' ', '_' ) ] );
-
+    strrep( Image.File(1:end-4), ' ', '_' ) ] );
+   
 %% Local Functions
 function [Points, Spline] = CreateTrack( Image, Scale )
     Figure = figure( 'WindowButtonDownFcn', @AddControlPoint );
     imshow( Image.Raw ); hold on;
-    title( 'Select Points Along the Track' )
+    title( {'Select Points Along the Track', ...
+            '(Add via Right or Middle Click - Existing Points May be Dragged)'} )
     
     Points.Pixels = [0,0];
     PointRoI = images.roi.Point( 'Position', Points.Pixels(end,:), 'Visible', 'off' );
