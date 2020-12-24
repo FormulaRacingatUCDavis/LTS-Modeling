@@ -68,8 +68,8 @@ plot( [4.5, 4.5], [0 80], 'k--' );
 plot( [75 , 75 ], [0 80], 'k--' );
 
 title( ['Point Distribution on Cornering Radii: ', ...
-    num2str( AutoXStr+EnduranceStr+100, 3), ' Points for Straights (> 200 [m])'] ) 
+    num2str( AutoXStr+EnduranceStr+100, 3), ' Points for Straights (> 250 [m])'] ) 
 ylabel( 'Associated Points [pts]' ); ylim([0 80]);
-xlabel( 'Cornering Radius [m]' ); xlim([0, 200]);
+xlabel( 'Cornering Radius [m]' ); xlim([0, 250]);
 
 legend( {'Skidpad', 'Autocross', 'Endurance'} );

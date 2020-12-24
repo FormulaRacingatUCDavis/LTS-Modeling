@@ -10,6 +10,7 @@ clc; clear; close all;
 % v1.0 - (04/15/2020) Initial Version
 % v2.0 - (12/20/2020) RoI Objects for Better Interactivity
 % v2.1 - (12/22/2020) C2 Interpolation Splines for Continuous Curvature
+% v2.2 - (12/23/2020) Corner Linear Interpolation Smoothing
 
 cd( fileparts( which( 'TrackProfilingAndAnalysis.m' ) ) )
 RadiusThresh = 250;
