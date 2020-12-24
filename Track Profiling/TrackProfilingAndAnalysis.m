@@ -12,7 +12,8 @@ clc; clear; close all;
 % v2.1 - (12/22/2020) C2 Interpolation Splines for Continuous Curvature
 
 cd( fileparts( which( 'TrackProfilingAndAnalysis.m' ) ) )
-
+RadiusThresh = 250;
+    
 %% Data Selection
 File = uigetfile( {'*'}, 'Select Track Layout Image or Previously Generated Matlab Data' );
 
@@ -36,8 +37,11 @@ else
     Scale.Length = input("Enter Scaling Length (m): ");
     Scale.Ratio = Scale.Length ./ Scale.Pixels;
     
-    %% Track Creation    
-    [Points, Spline] = CreateTrack( Image, Scale );
+    %% Spline Creation  
+    [Points, Spline] = SelectSpline( Image, Scale, RadiusThresh );
+    
+    %% Corner Correction
+    Spline = CornerSmoothing( Spline, RadiusThresh );
 end
 
 clear File
@@ -45,25 +49,39 @@ clear File
 %% Plotting
 Figure = figure( 'WindowState', 'Maximized' );
 sgtitle( [strrep(Image.File(1:end-4),'_',' '), ' Analysis'] )
-subplot(1,2,1)
+subplot(2,2,[1 3])
 hold on;
 
 imshow( Image.Raw )
 plot( Points.Pixels(:,1), Points.Pixels(:,2), 'rx', 'MarkerSize', 6 )
-plot( Spline.Pixels(:,1), Spline.Pixels(:,2), 'r' )
+scatter( Spline.Pixels(Spline.IsCorner,1), Spline.Pixels(Spline.IsCorner,2), 2, 'r' )
+scatter( Spline.Pixels(~Spline.IsCorner,1), Spline.Pixels(~Spline.IsCorner,2), 2, 'k' )
 
 title( 'Racing Line' )
 
-subplot(1,2,2)
+subplot(2,2,4)
 hold on;
 
-Histogram = histogram( abs(Spline.Radius), 0:2.5:200, ...
+Histogram = histogram( abs(Spline.Radius(:,2)), 0:2.5:RadiusThresh, ...
     'Normalization', 'Probability' );
 
 title( ['Distribution of Turning Radius: ', ...
-    num2str( 100 * (1 - sum( Histogram.Values ) ), 4 ), '% > 200 [m]' ] )
+    num2str( 100 * (1 - sum( Histogram.Values ) ), 4 ), '% > ', num2str(RadiusThresh), ' [m]' ] )
 xlabel( 'Turning Radius [m]' )
 ylabel( 'Probability [ ]' )
+
+subplot(2,2,2)
+hold on;
+
+scatter( Spline.Distance(~Spline.IsCorner), Spline.Radius(~Spline.IsCorner,1), 2, 'k.' );
+scatter( Spline.Distance( Spline.IsCorner), Spline.Radius( Spline.IsCorner,1), 2, 'r.' ); 
+scatter( Spline.Distance( Spline.IsCorner), Spline.Radius( Spline.IsCorner,2), 2, 'b.' ); 
+
+title( 'Turning Radius Trace' )
+xlabel( 'Track Distance [m]' )
+ylabel( 'Turning Radius [m]' ); ylim([-300, 300])
+
+legend( {'Raw Straights', 'Raw Corners', 'Linearized Corners'} )
 
 %% Save Results
 save( [fileparts( which( 'TrackProfilingAndAnalysis.m' ) ), '\Analyses\' ...
@@ -76,7 +94,7 @@ saveas( Figure, [fileparts( which( 'TrackProfilingAndAnalysis.m' ) ), '\Analyses
 Figure.WindowState = 'normal';
 
 %% Local Functions
-function [Points, Spline] = CreateTrack( Image, Scale )
+function [Points, Spline] = SelectSpline( Image, Scale, RadiusThresh )
     Figure = figure( 'WindowButtonDownFcn', @AddControlPoint );
     imshow( Image.Raw ); hold on;
     title( {'Select Points Along the Track', ...
@@ -107,8 +125,9 @@ function [Points, Spline] = CreateTrack( Image, Scale )
             if size(Points.Pixels,1) > 5
                 Spline = SplineGeneration( Points.Pixels(2:end,:), Scale );
 
-                delete( findobj( 'Color', 'b', 'LineStyle', '--' ) );
-                plot( Spline.Pixels(:,1), Spline.Pixels(:,2), 'b--' );
+                delete( findobj( 'Type', 'scatter' ) );
+                scatter( Spline.Pixels(abs(Spline.Radius)>RadiusThresh,1), Spline.Pixels(abs(Spline.Radius)>RadiusThresh,2), 2, 'k' );
+                scatter( Spline.Pixels(abs(Spline.Radius)<RadiusThresh,1), Spline.Pixels(abs(Spline.Radius)<RadiusThresh,2), 2, 'r' );
             end
         end
     end
@@ -119,61 +138,103 @@ function [Points, Spline] = CreateTrack( Image, Scale )
         if size(Points.Pixels,1) > 5
             Spline = SplineGeneration( Points.Pixels(2:end,:), Scale );
 
-            delete( findobj( 'Color', 'b', 'LineStyle', '--' ) );
-            plot( Spline.Pixels(:,1), Spline.Pixels(:,2), 'b--' );
+            delete( findobj( 'Type', 'scatter' ) );
+            scatter( Spline.Pixels(abs(Spline.Radius)>RadiusThresh,1), Spline.Pixels(abs(Spline.Radius)>RadiusThresh,2), 2, 'k' );
+            scatter( Spline.Pixels(abs(Spline.Radius)<RadiusThresh,1), Spline.Pixels(abs(Spline.Radius)<RadiusThresh,2), 2, 'r' );
         end
+    end
+
+    function Spline = SplineGeneration( Points, Scale )
+        % Compute Control Derivatives
+        D = zeros( size(Points) ); 
+        for j = 1 : size(Points,2)
+            A = diag( 4*ones( size(Points,1)  ,1 )   ) + ...
+                diag(   ones( size(Points,1)-1,1 ),-1) + ...
+                diag(   ones( size(Points,1)-1,1 ), 1);
+
+            A(1  ,1  ) = 2;
+            A(end,end) = 2;
+
+
+            b          = zeros( size(Points,1),1 );
+            b(1)       = 3*( Points(2    ,j) - Points(1      ,j) );
+            b(2:end-1) = 3*( Points(3:end,j) - Points(1:end-2,j) );
+            b(end)     = 3*( Points(end  ,j) - Points(end-1  ,j) );
+
+            D(:,j) = A\b;
+        end
+
+        Spline.Coeff.a = Points(1:end-1,:);
+        Spline.Coeff.b = D(1:end-1,:);
+        Spline.Coeff.c = 3*(Points(2:end  ,:) - Points(1:end-1,:)) - 2*D(1:end-1,:) - D(2:end,:);
+        Spline.Coeff.d = 2*(Points(1:end-1,:) - Points(2:end  ,:)) +   D(1:end-1,:) + D(2:end,:);
+
+        u = linspace(0,1,1000)';
+        Spline.Pixels = [];
+        d             = [];
+        c             = [];
+
+        for i = 1 : size(Points,1)-1
+            pi = Spline.Coeff.a(i,:)       + Spline.Coeff.b(i,:).*u   + ...
+                 Spline.Coeff.c(i,:).*u.^2 + Spline.Coeff.d(i,:).*u.^3;  
+
+            di =    Spline.Coeff.b(i,:) + 2.*Spline.Coeff.c(i,:) .* u + 3.*Spline.Coeff.d(i,:) .* u.^2;
+            ci = 2.*Spline.Coeff.c(i,:) + 6.*Spline.Coeff.d(i,:) .* u;
+
+            Spline.Pixels = [Spline.Pixels; pi];
+            d = [d; di]; %#ok<AGROW>
+            c = [c; ci]; %#ok<AGROW>
+        end
+
+        Spline.Length = Spline.Pixels .* Scale.Ratio;
+        Spline.Length = Spline.Length - Spline.Length(1,:);
+
+        Spline.Distance = zeros( size(Spline.Length,1), 1 );
+        for i = 2 : size(Spline.Length,1)
+            Spline.Distance(i) = Spline.Distance(i-1) + norm( Spline.Length(i,:)-Spline.Length(i-1,:), 2 );
+        end
+
+        Spline.Radius = (d(:,1).^2 + d(:,2).^2).^(3/2) ./ (c(:,1).*d(:,2) - c(:,2).*d(:,1));
     end
 end
 
-function Spline = SplineGeneration( Points, Scale )
-    % Compute Control Derivatives
-    D = zeros( size(Points) ); 
-    for j = 1 : size(Points,2)
-        A = diag( 4*ones( size(Points,1)  ,1 )   ) + ...
-            diag(   ones( size(Points,1)-1,1 ),-1) + ...
-            diag(   ones( size(Points,1)-1,1 ), 1);
+function Spline = CornerSmoothing( Spline, RadiusThresh )
+    Spline.IsCorner = abs(Spline.Radius) < RadiusThresh;
+    
+    StraightIdx = find(~Spline.IsCorner);
+    Entry.Idx = diff(StraightIdx) > 1;
+    Entry.Idx = StraightIdx(Entry.Idx)+1;
+    
+    CornerIdx = find(Spline.IsCorner);
+    Exit.Idx = find( diff(CornerIdx) > 1 );
+    Exit.Idx = [Exit.Idx; length(CornerIdx)];
+    Exit.Idx = CornerIdx(Exit.Idx);
+    
+    Entry.Distance = Spline.Distance(Entry.Idx);
+    Exit.Distance  = Spline.Distance(Exit.Idx );
+    
+    Entry.Radius = Spline.Radius(Entry.Idx);
+    Exit.Radius  = Spline.Radius(Exit.Idx );
+    
+    Entry.Slope = (Spline.Radius(Entry.Idx+1)   - Spline.Radius(Entry.Idx-1)) ./ ...
+                  (Spline.Distance(Entry.Idx+1) - Spline.Distance(Entry.Idx-1));
+    Exit.Slope  = (Spline.Radius(Exit.Idx+1)    - Spline.Radius(Exit.Idx-1))  ./ ...
+                  (Spline.Distance(Exit.Idx+1)  - Spline.Distance(Exit.Idx-1) ); 
+    
+    Spline.Radius(:,2) = Spline.Radius(:,1);
+    for i = 1 : length( Entry.Idx )
+        xData = Spline.Distance( Entry.Idx(i) : Exit.Idx(i) );
+        yData = abs(Spline.Radius( Entry.Idx(i) : Exit.Idx(i) ));
         
-        A(1  ,1  ) = 2;
-        A(end,end) = 2;
-        
-        
-        b          = zeros( size(Points,1),1 );
-        b(1)       = 3*( Points(2    ,j) - Points(1      ,j) );
-        b(2:end-1) = 3*( Points(3:end,j) - Points(1:end-2,j) );
-        b(end)     = 3*( Points(end  ,j) - Points(end-1  ,j) );
-        
-        D(:,j) = A\b;
+        IsMin = find( islocalmin( yData, 'MinProminence', 2 ) );
+        if ~isscalar( IsMin )
+            xMin = xData( IsMin([1 end]) );
+            yMin = yData( IsMin([1 end]) );
+            
+            yData(IsMin(1) : IsMin(end)) = interp1( xMin, yMin, xData(IsMin(1) : IsMin(end)) );
+            
+            Spline.Radius(Entry.Idx(i) : Exit.Idx(i),2) = ...
+                sign( Spline.Radius(Entry.Idx(i)) ) .* yData; 
+        end
     end
-    
-    Spline.Coeff.a = Points(1:end-1,:);
-    Spline.Coeff.b = D(1:end-1,:);
-    Spline.Coeff.c = 3*(Points(2:end  ,:) - Points(1:end-1,:)) - 2*D(1:end-1,:) - D(2:end,:);
-    Spline.Coeff.d = 2*(Points(1:end-1,:) - Points(2:end  ,:)) +   D(1:end-1,:) + D(2:end,:);
-    
-    u = linspace(0,1,1000)';
-    Spline.Pixels = [];
-    d             = [];
-    c             = [];
-    
-    for i = 1 : size(Points,1)-1
-        pi = Spline.Coeff.a(i,:)       + Spline.Coeff.b(i,:).*u   + ...
-             Spline.Coeff.c(i,:).*u.^2 + Spline.Coeff.d(i,:).*u.^3;  
-        
-        di =    Spline.Coeff.b(i,:) + 2.*Spline.Coeff.c(i,:) .* u + 3.*Spline.Coeff.d(i,:) .* u.^2;
-        ci = 2.*Spline.Coeff.c(i,:) + 6.*Spline.Coeff.d(i,:) .* u;
-        
-        Spline.Pixels = [Spline.Pixels; pi];
-        d = [d; di]; %#ok<AGROW>
-        c = [c; ci]; %#ok<AGROW>
-    end
-    
-    Spline.Length = Spline.Pixels .* Scale.Ratio;
-    Spline.Length = Spline.Length - Spline.Length(1,:);
-    
-    Spline.Distance = zeros( size(Spline.Length,1), 1 );
-    for i = 2 : size(Spline.Length,1)
-        Spline.Distance(i) = Spline.Distance(i-1) + norm( Spline.Length(i,:)-Spline.Length(i-1,:), 2 );
-    end
-    
-    Spline.Radius = (d(:,1).^2 + d(:,2).^2).^(3/2) ./ (c(:,1).*d(:,2) - c(:,2).*d(:,1));
 end
