@@ -16,6 +16,13 @@ cd( fileparts( which( 'TrackProfilingAndAnalysis.m' ) ) )
 RadiusThresh = 250;
     
 %% Data Selection
+% Either Select:
+%   - Previously generated MATLAB analysis (.mat in "Analyses" folder) 
+%     to visualize existing results
+% or 
+%   - Raw track image (.png or .jpg in the "Track Map Images" folder)
+%     to generate a new track analysis
+
 File = uigetfile( {'*'}, 'Select Track Layout Image or Previously Generated Matlab Data' );
 
 if ~isempty( regexp( File, '.mat*', 'Once' ) )
