@@ -12,6 +12,7 @@ clc; clear; close all;
 % v2.1 - (12/22/2020) C2 Interpolation Splines for Continuous Curvature
 % v2.2 - (12/23/2020) Corner Linear Interpolation Smoothing
 
+addpath( genpath( fileparts( which( 'TrackProfilingAndAnalysis.m' ) ) ) )
 cd( fileparts( which( 'TrackProfilingAndAnalysis.m' ) ) )
 RadiusThresh = 250;
     
