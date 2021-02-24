@@ -74,8 +74,8 @@ hold on;
 Histogram = histogram( abs(Spline.Radius(:,2)), 0:2.5:RadiusThresh, ...
     'Normalization', 'Probability' );
 
-title( ['Distribution of Turning Radius: ', ...
-    num2str( 100 * (1 - sum( Histogram.Values ) ), 4 ), '% > ', num2str(RadiusThresh), ' [m]' ] )
+title( ['Radius Distribution: ', ...
+    num2str( 100 * (1 - sum( Histogram.Values ) ), 4 ), '\% $>$ ', num2str(RadiusThresh), ' [m]' ] )
 xlabel( 'Turning Radius [m]' )
 ylabel( 'Probability [ ]' )
 
