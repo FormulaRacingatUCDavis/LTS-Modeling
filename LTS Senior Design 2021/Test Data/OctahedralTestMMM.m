@@ -43,4 +43,4 @@ zlabel( 'Yaw Acceleration [rad/s^2]' )
 h = colorbar;
 h.Label.String = 'Speed [m/s]';
 
-%% Solve for GGV Surface from MMM (Local repositiory example)
+%% Solve for GGV Surface from MMM
