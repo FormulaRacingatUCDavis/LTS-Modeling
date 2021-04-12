@@ -164,7 +164,6 @@ function [Points, Spline] = SelectSpline( Image, Scale, RadiusThresh )
             A(1  ,1  ) = 2;
             A(end,end) = 2;
 
-
             b          = zeros( size(Points,1),1 );
             b(1)       = 3*( Points(2    ,j) - Points(1      ,j) );
             b(2:end-1) = 3*( Points(3:end,j) - Points(1:end-2,j) );

@@ -7,7 +7,7 @@
 % Version 1 - 1/14/2021
 
 %% Corner Conditions
-v = linspace(0,50,11); % Array of Speeds [m/s]
+v = linspace(30,30,1); % Array of Speeds [m/s]
 
 a_drive =  1.4 + ( 0.2-1.4).*(v./50).^2; % Peak Traction Acceleration  [g]
 a_brake = -1.7 + (-2.0+1.7).*(v./50).^2; % Peak Braking  Acceleration  [g]
@@ -21,17 +21,28 @@ r_peak  =  25  + ( 23 -25 ).*(v./50).^2; % Peak Yaw Acceleration       [rad/s^]
 a_peak  = -0.15.*ones(size(v));          % Peak Lateral Acceleration   [g]
 
 %% Form MMM Point Cloud
-MMM = zeros(4,6*length(v));
+MMM = zeros(6*length(v),4);
 
 for i = 1:length(v)
-   MMM(:,6*(i-1)+1) = [v(i); a_drive(i);  0         ;  0         ]; 
-   MMM(:,6*(i-1)+2) = [v(i); a_bound(i);  a_peak(i) ;  r_peak(i) ];
-   MMM(:,6*(i-1)+3) = [v(i); a_bound(i);  a_limit(i);  r_limit(i)];
-   MMM(:,6*(i-1)+4) = [v(i); a_bound(i); -a_peak(i) ; -r_peak(i) ];
-   MMM(:,6*(i-1)+5) = [v(i); a_bound(i); -a_limit(i); -r_limit(i)];
-   MMM(:,6*i      ) = [v(i); a_brake(i);  0         ;  0         ];
+   MMM(6*(i-1)+1,:) = [v(i); a_drive(i);  0         ;  0         ]; 
+   MMM(6*(i-1)+2,:) = [v(i); a_bound(i);  a_peak(i) ;  r_peak(i) ];
+   MMM(6*(i-1)+3,:) = [v(i); a_bound(i);  a_limit(i);  r_limit(i)];
+   MMM(6*(i-1)+4,:) = [v(i); a_bound(i); -a_peak(i) ; -r_peak(i) ];
+   MMM(6*(i-1)+5,:) = [v(i); a_bound(i); -a_limit(i); -r_limit(i)];
+   MMM(6*i      ,:) = [v(i); a_brake(i);  0         ;  0         ];
 end
 
+T = delaunayn( MMM(:,2:end) );
+k = convhulln( MMM(:,2:end) );
+
+figure
+subplot(2,1,1)
+tetramesh( T, MMM(:,2:end) )
+axis tight
+subplot(2,1,2)
+trisurf( k, MMM(:,2), MMM(:,3), MMM(:,4) )
+
+return
 figure;
 scatter3( MMM(2,:), MMM(3,:), MMM(4,:), 10, MMM(1,:), 'filled' )
 
