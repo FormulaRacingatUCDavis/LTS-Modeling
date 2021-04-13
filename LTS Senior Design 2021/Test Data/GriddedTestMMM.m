@@ -115,3 +115,7 @@ title( 'Base Speed LAS' )
 xlabel( 'Longtudinal Acceleration, $\ddot{x}$' )
 ylabel( 'Lateral Acceleration, $\ddot{y}$' )
 zlabel( 'Yaw Acceleration, $\ddot{\psi}$' )
+
+%% Data Export
+save( [fileparts( which( 'GriddedTestMMM.m' ) ), '\TestLAS'], ...
+    'BodySlip', 'Steer', 'Speed', 'LongAcc', 'LatAcc', 'YawAcc' )
