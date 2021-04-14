@@ -46,11 +46,29 @@ else
     Scale.Length = input("Enter Scaling Length (m): ");
     Scale.Ratio = Scale.Length ./ Scale.Pixels;
     
-    %% Spline Creation  
-    [Points, Spline] = SelectSpline( Image, Scale, RadiusThresh );
-    
-    %% Corner Correction
-    Spline = CornerSmoothing( Spline, RadiusThresh );
+    %% Boundary or Arbitrary Spline
+    SplineType= input('Enter 1 to select arbitrary spline, 2 to define course boundaries');
+    switch SplineType
+        case 1
+            %% Spline Creation  
+            [Points, Spline] = SelectSpline( Image, Scale, RadiusThresh );
+            Spline.Length = Spline.Length - Spline.Length(1,:); %moved out of funct spline generation for course boundary purposes
+            %% Corner Correction
+            Spline = CornerSmoothing( Spline, RadiusThresh );
+        case 2
+            %% Define Right Boundary
+            disp('Select points along the right boundary')
+            
+            [RightPoints, RightSpline]=SelectSpline( Image, Scale, RadiusThresh );
+            RightSpline=CornerSmoothing( RightSpline, RadiusThresh );
+            %% Define Left Boundary
+            disp('Select points along the left boundary')
+            
+            [LeftPoints, LeftSpline]=SelectSpline( Image, Scale, RadiusThresh );
+            LeftSpline=CornerSmoothing( LeftSpline, RadiusThresh );
+            %% Linking and Discretizing
+            Boundaries=Discretize( RightSpline, LeftSpline );
+    end
 end
 
 clear File
@@ -196,7 +214,7 @@ function [Points, Spline] = SelectSpline( Image, Scale, RadiusThresh )
         end
 
         Spline.Length = Spline.Pixels .* Scale.Ratio;
-        Spline.Length = Spline.Length - Spline.Length(1,:);
+        
 
         Spline.Distance = zeros( size(Spline.Length,1), 1 );
         for i = 2 : size(Spline.Length,1)
@@ -246,4 +264,67 @@ function Spline = CornerSmoothing( Spline, RadiusThresh )
                 sign( Spline.Radius(Entry.Idx(i)) ) .* yData; 
         end
     end
+end
+
+function Boundaries = Discretize( RightSpline, LeftSpline )
+RDistance=1;
+LDistance=1;
+Boundaries.Points=[RightSpline.Length(1,:), LeftSpline.Length(1,:)];
+i=1;
+n=1;
+while RDistance < RightSpline.Distance(end)  &&  LDistance < LeftSpline.Distance(end)
+
+    RightSlopeOld=( RightSpline.Length(i+1,2) - RightSpline.Length(i,2) ) / ( RightSpline.Length(i+1,1) - RightSpline.Length(i,1) );
+    LeftSlopeOld=( LeftSpline.Length(n+1,2) - LeftSpline.Length(n,2) ) / ( LeftSpline.Length(n+1,1) - LeftSpline.Length(n,1) );
+    
+    % Using iteration to get near Distance, Spline.Distance not guaranteed
+    % to == Distance at any index
+    while abs( RightSpline.Distance(i) - RDistance ) > 0.1
+        RightRate=RightSpline.Distance(i+1) - RightSpline.Distance(i);
+        i=i + round( (RDistance-RightSpline.Distance(i))/RightRate );
+    end
+    
+    while abs( LeftSpline.Distance(n) - LDistance ) > 0.1
+        LeftRate=LeftSpline.Distance(n+1) - LeftSpline.Distance(n);
+        n=n + round( (LDistance-LeftSpline.Distance(n))/LeftRate );
+    end
+    
+    RightSlope=( RightSpline.Length(i+1,2) - RightSpline.Length(i,2) ) / ( RightSpline.Length(i+1,1) - RightSpline.Length(i,1) );
+    LeftSlope=( LeftSpline.Length(n+1,2) - LeftSpline.Length(n,2) ) / ( LeftSpline.Length(n+1,1) - LeftSpline.Length(n,1) );
+    
+    % Check slope change constraint
+    while RightSlope - RightSlopeOld > 0.3
+        RDistance=RDistance - 0.1;
+        while abs( RightSpline.Distance(i) - RDistance ) > 0.1
+            RightRate=RightSpline.Distance(i+1) - RightSpline.Distance(i);
+            i=i + round( (RDistance-RightSpline.Distance(i))/RightRate );
+        end
+        RightSlope=( RightSpline.Length(i+1,2) - RightSpline.Length(i,2) ) / ( RightSpline.Length(i+1,1) - RightSpline.Length(i,1) );
+    end
+    
+    while LeftSlope - LeftSlopeOld > 0.3
+        LDistance=LDistance - 0.1;
+        while abs( LeftSpline.Distance(n) - LDistance ) > 0.1
+            LeftRate=LeftSpline.Distance(n+1) - LeftSpline.Distance(n);
+            n=n + round( (LDistance-LeftSpline.Distance(n))/LeftRate );
+        end
+        LeftSlope=( LeftSpline.Length(n+1,2) - LeftSpline.Length(n,2) ) / ( LeftSpline.Length(n+1,1) - LeftSpline.Length(n,1) );
+    end
+    
+    % Average curvature to determine turn direction
+    RightCurvature=( RightSpline.Length(i+1,2) -2*RightSpline.Length(i,2) + RightSpline.Length(i-1,2) ) / ( RightSpline.Length(i+1,1) -2*RightSpline.Length(i,1) + RightSpline.Length(i-1,1) );
+    LeftCurvature=( LeftSpline.Length(n+1,2) -2*LeftSpline.Length(n,2) + LeftSpline.Length(n-1,2) ) / ( LeftSpline.Length(n+1,1) -2*LeftSpline.Length(n,2) + LeftSpline.Length(n-1,1) );
+    AvgCurv=( RightCurvature + LeftCurvature ) / 2;
+    
+    if AvgCurv >= 0 
+        LinkingSlope= -1/LeftSlope;
+        RightPoint=
+        Boundaries.Points=[Boundaries.Points; RightPoint, LeftSpline.Length(n,:)];
+    else
+        LinkingSlope= -1/RightSlope;
+        LeftPoint=
+        Boundaries.Points=[Boundaries.Points; RightSpline.Length(i,:), LeftPoint];
+    end
+end
+
 end
