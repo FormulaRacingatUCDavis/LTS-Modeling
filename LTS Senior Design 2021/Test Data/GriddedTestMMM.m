@@ -1,5 +1,9 @@
 clc; clear; close all;
 
+set(groot,'defaulttextinterpreter','latex');
+set(groot,'defaultAxesTickLabelInterpreter','latex');
+set(groot,'defaultLegendInterpreter','latex');
+
 %% GriddedTestMMM - Creates 4d Gridded Test MMM
 % Generates a test MMM from gridded test data.
 
@@ -35,7 +39,7 @@ LongAcc = [linspace(-Base.BrakeGrip,0,n), linspace(0+Base.Traction/(n-1),Base.Tr
 
 Speed    =     5  :  5  : Top.Speed;
 
-[BodySlip, Steer, LongAcc, Speed] = ndgrid( BodySlip, Steer, LongAcc, Speed );
+[Steer, BodySlip, Speed, LongAcc] = ndgrid( Steer, BodySlip, Speed, LongAcc );
 
 %% Base MMM Data
 % MMM data taken from RCVD and scaled to be reflective of FSAE Car
@@ -45,13 +49,13 @@ LatAcc = repmat( [ 0.90, 0.90, 0.90; ...
                   -0.05, 0.67, 0.85; ...
                   -0.60, 0.00, 0.60; ...
                   -0.85,-0.67, 0.05; ...
-                  -0.90,-0.90,-0.90], 1, 1, size(LongAcc,3), size(Speed,4) );
+                  -0.90,-0.90,-0.90]', 1, 1, size(Speed,3), size(LongAcc,4) );
  
 YawAcc = repmat( [-0.09,-0.09,-0.09; ...
                   -0.33,-0.10,-0.04; ...
                   -0.12, 0.00, 0.12; ...
                    0.04, 0.10, 0.33; ...
-                   0.09, 0.09, 0.09], 1, 1, size(LongAcc,3), size(Speed,4) );
+                   0.09, 0.09, 0.09]', 1, 1, size(Speed,3), size(LongAcc,4) );
 
 LatAcc = LatAcc .* Base.LatGrip ./ max( abs(LatAcc), [], 'all' );
 YawAcc = YawAcc .* Wheelbase .* Mass .* 9.81 ./ YawInertia;
@@ -99,12 +103,16 @@ for i = 1:numel(Speeds)
         sqrt( 1 - LongAcc(LongAcc>0 & Speed==Speeds(i)).^2 ./ max( abs(LongAcc(LongAcc>0 & Speed==Speeds(i))) ).^2);
 end
 
+%% Unit Conversion
+LongAcc = 9.81 .* LongAcc;
+LatAcc = 9.81 .* LatAcc;
+
 %% Plotting
 figure;
-for i = 1:size(LongAcc,3)
-    mesh( LongAcc(:,:,i,Speed(1,1,1,:)==Base.Speed) , ...
-           LatAcc(:,:,i,Speed(1,1,1,:)==Base.Speed) , ...
-           YawAcc(:,:,i,Speed(1,1,1,:)==Base.Speed) ); hold on;
+for i = 1:size(LongAcc,4)
+    mesh( LongAcc(:,:,Speed(1,1,:,1)==Base.Speed,i) , ...
+           LatAcc(:,:,Speed(1,1,:,1)==Base.Speed,i) , ...
+           YawAcc(:,:,Speed(1,1,:,1)==Base.Speed,i) ); hold on;
 
     scatter3( LongAcc(Speed(:)==Base.Speed) , ...
                LatAcc(Speed(:)==Base.Speed) , ...
