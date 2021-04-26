@@ -2,21 +2,35 @@ clc; clear; close all;
 
 %% Test Script
 
-LAS = load('TestLAS.mat');
+PE = load('TestPE.mat');
 
-%% LAS Volumetric Interpolation
-LatAcc = griddedInterpolatant( LAS.BodySlip, LAS.Steer, LAS.Speed, LAS.LongAcc, LAS.LatAcc );
-YawAcc = griddedInterpolatant( LAS.BodySlip, LAS.Steer, LAS.Speed, LAS.LongAcc, LAS.YawAcc );
+%% Performance Envelope Interpolation
+% PE.State(SteerIdx,BodySlipIdx,SpeedIdx,LongAccIdx)
 
-%% LAS 4D Shelling
-LAS.ShellIdx = 
+%PE.Interp.LatAcc = interpn( PE.BodySlip, PE.Steer, PE.Speed, PE.LongAcc, PE.LatAcc );
+%PE.Interp.YawAcc = interpn( PE.BodySlip, PE.Steer, PE.Speed, PE.LongAcc, PE.YawAcc );
 
-%% LSBC Extraction (Indexing LongAcc == 0)
-LSBC.Speed = LAS.Speed( LAS.LongAcc == 0 );
-LSBC.LatAcc = LAS.LatAcc( LAS.LongAcc == 0 );
-LSBC.YawAcc = LAS.YawAcc( LAS.LongAcc == 0 );
+%% LAS Shelling
+% LAS.State(:,2*(SteerIdx+BodySlipIdx-2),SpeedIdx,LongAccIdx) % Dimensionality
+LAS.ShellIdx = [[(1:size(PE.BodySlip, 1))                            ; ones(1, size(PE.BodySlip, 1))                       ], ...
+                [size(PE.BodySlip,1).*ones(1, size(PE.BodySlip, 2)-1); (2:size(PE.BodySlip, 2))                            ], ...
+                [(size(PE.BodySlip, 1)-1:-1:1)                       ; size(PE.BodySlip,2).*ones(1, size(PE.BodySlip, 1)-1)], ...
+                [ones(1, size(PE.BodySlip, 2)-2)                     ;(size(PE.BodySlip, 2)-1:-1:2)                        ]] ;         
 
-scatter3( LSBC.Speed, LSBC.LatAcc, LSBC.YawAcc, 'k.' );
+      
+LAS.ShellIdx = repmat( 
+LAS.BodySlip = PE.BodySlip( sub2ind( size(PE.BodySlip), LAS.ShellIdx(1,:), LAS.ShellIdx(2,:), ones(1,length(LAS.ShellIdx)), ones(1,length(LAS.ShellIdx)) ) ); 
+            
+%% LSBS Extraction (Indexing LongAcc == 0)
+% 
+LSBS.Speed = LAS.Speed( PE.LongAcc == 0 );
+LSBS.LatAcc = LAS.LatAcc( PE.LongAcc == 0 );
+LSBS.YawAcc = LAS.YawAcc( PE.LongAcc == 0 );
 
+scatter3( LSBS.Speed, LSBS.LatAcc, LSBS.YawAcc, 'k.' );
+
+%% LSBC Extraction (Indexing Speed = BaseSpeed from LSBS)
+
+%% GGV-V Extraction (Slicing where YawAcc = 0)
 
 

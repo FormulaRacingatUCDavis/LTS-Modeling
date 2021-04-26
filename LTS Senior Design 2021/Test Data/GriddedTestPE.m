@@ -4,10 +4,10 @@ set(groot,'defaulttextinterpreter','latex');
 set(groot,'defaultAxesTickLabelInterpreter','latex');
 set(groot,'defaultLegendInterpreter','latex');
 
-%% GriddedTestMMM - Creates 4d Gridded Test MMM
-% Generates a test MMM from gridded test data.
+%% GriddedTestPE - Creates 4d Gridded Test Performance Envelope
+% Generates a test PE from gridded test data.
 
-%% LAS Control Points
+%% PE Control Points
 %%% Base Speed Data
 Base.Speed     = 15;
 Base.LatGrip   = 1.6;
@@ -19,7 +19,7 @@ Base.Rotation  = 23;
 Top.Speed     = 50;
 Top.LatGrip   = 1.9;
 Top.BrakeGrip = 2.2;
-Top.Traction  = 0.1;
+Top.Traction  = 0;
 Top.Rotation  = 20;
 
 %%% Vehicle Parameters
@@ -37,7 +37,7 @@ Steer = [Steer, abs(Steer(end-1:-1:1))];
 n = 10;
 LongAcc = [linspace(-Base.BrakeGrip,0,n), linspace(0+Base.Traction/(n-1),Base.Traction,(n-1))];
 
-Speed    =     5  :  5  : Top.Speed;
+Speed = 5 : 5 : Top.Speed;
 
 [Steer, BodySlip, Speed, LongAcc] = ndgrid( Steer, BodySlip, Speed, LongAcc );
 
@@ -119,11 +119,11 @@ for i = 1:size(LongAcc,4)
                YawAcc(Speed(:)==Base.Speed) , 'k.' );
 end 
 
-title( 'Base Speed LAS' )
+title( 'Base Speed PE' )
 xlabel( 'Longtudinal Acceleration, $\ddot{x}$' )
 ylabel( 'Lateral Acceleration, $\ddot{y}$' )
 zlabel( 'Yaw Acceleration, $\ddot{\psi}$' )
 
 %% Data Export
-save( [fileparts( which( 'GriddedTestMMM.m' ) ), '\TestLAS'], ...
+save( [fileparts( which( 'GriddedTestPE.m' ) ), '\TestPE'], ...
     'BodySlip', 'Steer', 'Speed', 'LongAcc', 'LatAcc', 'YawAcc' )
