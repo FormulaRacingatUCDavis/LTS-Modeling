@@ -4,11 +4,20 @@ clc; clear; close all;
 
 PE = load('TestPE.mat');
 
+<<<<<<< HEAD
 %% Performance Envelope Interpolation
 % PE.State(SteerIdx,BodySlipIdx,SpeedIdx,LongAccIdx)
 
 %PE.Interp.LatAcc = interpn( PE.BodySlip, PE.Steer, PE.Speed, PE.LongAcc, PE.LatAcc );
 %PE.Interp.YawAcc = interpn( PE.BodySlip, PE.Steer, PE.Speed, PE.LongAcc, PE.YawAcc );
+=======
+%% LAS Volumetric Interpolation
+%LatAcc = griddedInterpolant( LAS.BodySlip, LAS.Steer, LAS.Speed, LAS.LongAcc, LAS.LatAcc );
+%YawAcc = griddedInterpolant( LAS.BodySlip, LAS.Steer, LAS.Speed, LAS.LongAcc, LAS.YawAcc );
+
+%% LAS 4D Shelling
+%LAS.ShellIdx = 
+>>>>>>> 48efc1726c0aad9d773d7380229d4d1bf7af6179
 
 %% LAS Shelling
 % LAS.State(:,2*(SteerIdx+BodySlipIdx-2),SpeedIdx,LongAccIdx) % Dimensionality
@@ -27,6 +36,7 @@ LSBS.Speed = LAS.Speed( PE.LongAcc == 0 );
 LSBS.LatAcc = LAS.LatAcc( PE.LongAcc == 0 );
 LSBS.YawAcc = LAS.YawAcc( PE.LongAcc == 0 );
 
+<<<<<<< HEAD
 scatter3( LSBS.Speed, LSBS.LatAcc, LSBS.YawAcc, 'k.' );
 
 %% LSBC Extraction (Indexing Speed = BaseSpeed from LSBS)
@@ -34,3 +44,5 @@ scatter3( LSBS.Speed, LSBS.LatAcc, LSBS.YawAcc, 'k.' );
 %% GGV-V Extraction (Slicing where YawAcc = 0)
 
 
+=======
+>>>>>>> 48efc1726c0aad9d773d7380229d4d1bf7af6179
