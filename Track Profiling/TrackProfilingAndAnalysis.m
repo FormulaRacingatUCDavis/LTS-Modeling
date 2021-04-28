@@ -1,4 +1,4 @@
-clc; clear; close all;
+%clc; clear; close all;
 
 %% Track Profiling & Analysis
 % Interactive script that generates a Catmull-Rom spline from user selected
@@ -67,6 +67,9 @@ else
             [LeftPoints, LeftSpline]=SelectSpline( Image, Scale, RadiusThresh );
             LeftSpline=CornerSmoothing( LeftSpline, RadiusThresh );
             %% Linking and Discretizing
+            Boundaries=Discretize( RightSpline, LeftSpline );
+        case 3
+            %%test
             Boundaries=Discretize( RightSpline, LeftSpline );
     end
 end
@@ -255,7 +258,7 @@ function Spline = CornerSmoothing( Spline, RadiusThresh )
         
         IsMin = find( islocalmin( yData, 'MinProminence', 2 ) );
         if ~isscalar( IsMin )
-            xMin = xData( IsMin([1 end]) );
+            xMin = xData( IsMin([1 end]) );% errorlog: Array indices must be positive integers or logical values.
             yMin = yData( IsMin([1 end]) );
             
             yData(IsMin(1) : IsMin(end)) = interp1( xMin, yMin, xData(IsMin(1) : IsMin(end)) );
@@ -272,59 +275,197 @@ LDistance=1;
 Boundaries.Points=[RightSpline.Length(1,:), LeftSpline.Length(1,:)];
 i=1;
 n=1;
+rs=1;
+ls=1;
 while RDistance < RightSpline.Distance(end)  &&  LDistance < LeftSpline.Distance(end)
-
-    RightSlopeOld=( RightSpline.Length(i+1,2) - RightSpline.Length(i,2) ) / ( RightSpline.Length(i+1,1) - RightSpline.Length(i,1) );
-    LeftSlopeOld=( LeftSpline.Length(n+1,2) - LeftSpline.Length(n,2) ) / ( LeftSpline.Length(n+1,1) - LeftSpline.Length(n,1) );
     
-    % Using iteration to get near Distance, Spline.Distance not guaranteed
-    % to == Distance at any index
-    while abs( RightSpline.Distance(i) - RDistance ) > 0.1
-        RightRate=RightSpline.Distance(i+1) - RightSpline.Distance(i);
-        i=i + round( (RDistance-RightSpline.Distance(i))/RightRate );
+    %Resampling with constant arc length
+    u=linspace(0, 1, round( RightSpline.Distance(rs*1000) - RightSpline.Distance((rs-1)*1000 +1))*100 )';
+    RightResamp= RightSpline.Coeff.a(rs,:) + RightSpline.Coeff.b(rs,:).*u + RightSpline.Coeff.c(rs,:).*u.^2 + RightSpline.Coeff.d(rs,:).*u.^3;
+    u=linspace(0, 1, round( LeftSpline.Distance(ls*1000) - LeftSpline.Distance((ls-1)*1000 +1))*100 )';
+    LeftResamp= LeftSpline.Coeff.a(ls,:) + RightSpline.Coeff.b(ls,:).*u + LeftSpline.Coeff.c(ls,:).*u.^2 + LeftSpline.Coeff.d(ls,:).*u.^3;
+    
+    RightSlopeOld=( RightResamp(i+1,2) - RightResamp(i,2) ) / ( RightResamp(i+1,1) - RightResamp(i,1) );
+    LeftSlopeOld=( LeftResamp(n+1,2) - LeftResamp(n,2) ) / ( LeftResamp(n+1,1) - LeftResamp(n,1) );
+    
+    % Ensure next point is on current right side spline
+    rsIncrease=0;
+    while RDistance >= RightSpline.Distance((rs+1)*1000)
+        rs=rs+1;
+        rsIncrease=rsIncrease+1;
+    end
+    % Resample if neccessary
+    if rsIncrease>0
+        u=linspace(0, 1, round( RightSpline.Distance(rs*1000) - RightSpline.Distance((rs-1)*1000 +1))*100 )';
+        RightResamp= RightSpline.Coeff.a(rs,:) + RightSpline.Coeff.b(rs,:).*u + RightSpline.Coeff.c(rs,:).*u.^2 + RightSpline.Coeff.d(rs,:).*u.^3;
     end
     
-    while abs( LeftSpline.Distance(n) - LDistance ) > 0.1
-        LeftRate=LeftSpline.Distance(n+1) - LeftSpline.Distance(n);
-        n=n + round( (LDistance-LeftSpline.Distance(n))/LeftRate );
+    RightResampDist= linspace(RightSpline.Distance((rs-1)*1000 +1), RightSpline.Distance(rs*1000), size(RightResamp,1));
+    
+    while RDistance > RightResampDist(i)
+        i=i+1;
     end
     
-    RightSlope=( RightSpline.Length(i+1,2) - RightSpline.Length(i,2) ) / ( RightSpline.Length(i+1,1) - RightSpline.Length(i,1) );
-    LeftSlope=( LeftSpline.Length(n+1,2) - LeftSpline.Length(n,2) ) / ( LeftSpline.Length(n+1,1) - LeftSpline.Length(n,1) );
+    % Left side
+    lsIncrease=0;
+    while LDistance >= LeftSpline.Distance((ls+1)*1000)
+        ls=ls+1;
+        lsIncrease=lsIncrease+1;
+    end
+    
+    if lsIncrease>0
+        u=linspace(0,1, round( LeftSpline.Distance(ls*1000) - LeftSpline.Distance((ls-1)*1000 +1))*100)';
+        LeftResamp= LeftSpline.Coeff.a(ls,:) + LeftSpline.Coeff.b(ls,:).*u + LeftSpline.Coeff.c(ls,:).*u.^2 + LeftSpline.Coeff.d(ls,:).*u.^3;
+    end
+    
+    LeftResampDist= linspace(LeftSpline.Distance((ls-1)*1000 +1), LeftSpline.Distance(ls*1000), size(LeftResamp,1));
+    
+    while LDistance > LeftResampDist(n)
+        n=n+1;
+    end
+    
+    RightSlope=( RightResamp(i+1,2) - RightResamp(i,2) ) / ( RightResamp(i+1,1) - RightResamp(i,1) );
+    LeftSlope=( LeftResamp(n+1,2) - LeftResamp(n,2) ) / ( LeftResamp(n+1,1) - LeftResamp(n,1) );
     
     % Check slope change constraint
+    rsDecrease=0;
     while RightSlope - RightSlopeOld > 0.3
         RDistance=RDistance - 0.1;
-        while abs( RightSpline.Distance(i) - RDistance ) > 0.1
-            RightRate=RightSpline.Distance(i+1) - RightSpline.Distance(i);
-            i=i + round( (RDistance-RightSpline.Distance(i))/RightRate );
+        while RDistance < RightSpline.Distance((rs+1)*1000)
+            rs=rs-1;
+            rsDecrease=rsDecrease+1;
         end
-        RightSlope=( RightSpline.Length(i+1,2) - RightSpline.Length(i,2) ) / ( RightSpline.Length(i+1,1) - RightSpline.Length(i,1) );
+        
+        if rsDecrease>0
+            u=linspace(0, 1, round( RightSpline.Distance(rs*1000) - RightSpline.Distance((rs-1)*1000)+1 )*100 )';
+            RightResamp= RightSpline.Coeff.a(rs,:) + RightSpline.Coeff.b(rs,:).*u + RightSpline.Coeff.c(rs,:).*u.^2 + RightSpline.Coeff.d(rs,:).*u.^3;
+        end
+    
+        RightResampDist= linspace(RightSpline.Distance((rs-1)*1000 +1), RightSpline.Distance(rs*1000), size(RightResamp,1));
+    
+        while RDistance > RightResampDist(i)
+            i=i+1;
+        end
+        RightSlope=( RightResamp(i+1,2) - RightResamp(i,2) ) / ( RightResamp(i+1,1) - RightResamp(i,1) );
     end
     
+    lsDecrease=0;
     while LeftSlope - LeftSlopeOld > 0.3
         LDistance=LDistance - 0.1;
-        while abs( LeftSpline.Distance(n) - LDistance ) > 0.1
-            LeftRate=LeftSpline.Distance(n+1) - LeftSpline.Distance(n);
-            n=n + round( (LDistance-LeftSpline.Distance(n))/LeftRate );
+        while LDistance < LeftSpline.Distance((ls+1)*1000)
+            ls=ls-1;
+            lsDecrease=lsDecrease+1;
         end
-        LeftSlope=( LeftSpline.Length(n+1,2) - LeftSpline.Length(n,2) ) / ( LeftSpline.Length(n+1,1) - LeftSpline.Length(n,1) );
+    
+        if lsDecrease>0
+            u=linspace(0,1, round( LeftSpline.Distance(ls*1000) - LeftSpline.Distance((ls-1)*1000)+1 )*100)';
+            LeftResamp= LeftSpline.Coeff.a(ls,:) + RightSpline.Coeff.b(ls,:).*u + LeftSpline.Coeff.c(ls,:).*u.^2 + LeftSpline.Coeff.d(ls,:).*u.^3;
+        end
+    
+        LeftResampDist= linspace(LeftSpline.Distance((ls-1)*1000+1), LeftSpline.Distance(ls*1000), size(LeftResamp,1));
+    
+        while LDistance > LeftResampDist(n)
+            n=n+1;
+        end
+        LeftSlope=( LeftResamp(n+1,2) - LeftResamp(n,2) ) / ( LeftResamp(n+1,1) - LeftResamp(n,1) );
     end
     
     % Average curvature to determine turn direction
-    RightCurvature=( RightSpline.Length(i+1,2) -2*RightSpline.Length(i,2) + RightSpline.Length(i-1,2) ) / ( RightSpline.Length(i+1,1) -2*RightSpline.Length(i,1) + RightSpline.Length(i-1,1) );
-    LeftCurvature=( LeftSpline.Length(n+1,2) -2*LeftSpline.Length(n,2) + LeftSpline.Length(n-1,2) ) / ( LeftSpline.Length(n+1,1) -2*LeftSpline.Length(n,2) + LeftSpline.Length(n-1,1) );
+    RightCurvature=( RightResamp(i+1,2) -2*RightResamp(i,2) + RightResamp(i-1,2) ) / ( RightResamp(i+1,1) -2*RightResamp(i,1) + RightResamp(i-1,1) );
+    LeftCurvature=( LeftResamp(n+1,2) -2*LeftResamp(n,2) + LeftResamp(n-1,2) ) / ( LeftResamp(n+1,1) -2*LeftResamp(n,2) + LeftResamp(n-1,1) );
     AvgCurv=( RightCurvature + LeftCurvature ) / 2;
     
     if AvgCurv >= 0 
         LinkingSlope= -1/LeftSlope;
-        RightPoint=
-        Boundaries.Points=[Boundaries.Points; RightPoint, LeftSpline.Length(n,:)];
+        LeftPoint= LeftResamp(n,:);
+        m=1;
+        rs=rs-rsIncrease+rsDecrease;
+        % hold values at beginning/end of each spline at and after initial spline for this outer loop
+        SplineIden=[RightSpline.Length(((rs-1)*1000)+1,:); RightSpline.Length(rs*1000,:)]; 
+        while m+rs <= size(RightSpline.Coeff.a,1)
+            SplineIden=[SplineIden; RightSpline.Length((rs+m-1)*1000 +1,:)];
+            m=m+1;
+        end
+        SplineIden=[SplineIden; RightSpline.Length((rs+m-1)*1000,:)]
+        
+        % find first intersection between linking line and adjacent points in SplineIden
+        % algorithm source https://www.mathworks.com/matlabcentral/answers/17039-line-and-a-line-segment-intersection
+        m=1;
+        while m < size(SplineIden,1) && (t < 0  || t > 1) 
+            t=((LeftPoint(2)-LinkingSlope*LeftPoint(1))- SplineIden(m,2) + LinkingSlope*SplineIden(m,1))/(SplineIden(m+1,2)- SplineIden(m,2)+ LinkingSlope*(SplineIden(m,1)-SplineIden(m+1,1)));
+            m=m+1;
+        end
+        
+        if t<0 || t>1
+            disp('no intersect found')
+            RDistance=RDistance+1;
+            LDistance=LDistance+1;
+            continue
+        end
+        t
+        rs=rs+m-1;
+        
+        % Resample correct spline
+        u=linspace(0, 1, round( RightSpline.Distance(rs*1000) - RightSpline.Distance(((rs-1)*1000)+1) )*100 )';
+        RightResamp= RightSpline.Coeff.a(rs,:) + RightSpline.Coeff.b(rs,:).*u + RightSpline.Coeff.c(rs,:).*u.^2 + RightSpline.Coeff.d(rs,:).*u.^3;
+        
+        m=1;
+        t=((LeftPoint(2)-LinkingSlope*LeftPoint(1))- RightResamp(m,2) + LinkingSlope*RightResamp(m,1))/(RightResamp(m+1,2)- RightResamp(m,2)+ LinkingSlope*(RightResamp(m,1)-RightResamp(m+1)));
+        while m <= size(RightResamp,1) && (t < 0 || t > 1)
+            t=((LeftPoint(2)-LinkingSlope*LeftPoint(1))- RightResamp(m,2) + LinkingSlope*RightResamp(m,1))/(RightResamp(m+1,2)- RightResamp(m,2)+ LinkingSlope*(RightResamp(m,1)-RightResamp(m+1)));
+            m=m+1;
+        end
+        
+        RightPoint= RightResamp(m,:);
+        Boundaries.Points=[Boundaries.Points; RightPoint, LeftPoint];
     else
         LinkingSlope= -1/RightSlope;
-        LeftPoint=
-        Boundaries.Points=[Boundaries.Points; RightSpline.Length(i,:), LeftPoint];
+        RightPoint= RightResamp(i,:);
+        m=0;
+        ls=ls-lsIncrease+lsDecrease;
+        % hold values at beginning/end of each spline at and after initial spline for this outer loop
+        SplineIden=[LeftSpline.Length(((ls-1)*1000)+1,:); LeftSpline.Length(ls*1000,:)]; 
+        while m+ls <= size(LeftSpline.Coeff.a,1)
+            SplineIden=[SplineIden; LeftSpline.Length(((ls+m-1)*1000 +1),:)];
+            m=m+1;
+        end
+        SplineIden=[SplineIden; LeftSpline.Length(((ls+m-1)*1000),:)]
+        
+        % find first intersection between linking line and adjacent points in SplineIden
+        % algorithm source https://www.mathworks.com/matlabcentral/answers/17039-line-and-a-line-segment-intersection
+        m=1;
+        while m < size(SplineIden,1)
+            t=((RightPoint(2)-LinkingSlope*RightPoint(1))- SplineIden(m,2) + LinkingSlope*SplineIden(m,1))/(SplineIden(m+1,2)- SplineIden(m,2)+ LinkingSlope*(SplineIden(m,1)-SplineIden(m+1,1)));
+            m=m+1;
+            if t < 1 && t > 0
+                break
+            end
+        end
+        
+        if t<0 || t>1
+            disp('no intersect found')
+            RDistance=RDistance+1;
+            LDistance=LDistance+1;
+            continue
+        end
+        t
+        ls=ls+m-1;
+        % Resample correct spline
+        u=linspace(0, 1, round( LeftSpline.Distance(ls*1000) - LeftSpline.Distance(((ls-1)*1000)+1) )*100 )';
+        LeftResamp= LeftSpline.Coeff.a(ls,:) + LeftSpline.Coeff.b(ls,:).*u + LeftSpline.Coeff.c(ls,:).*u.^2 + LeftSpline.Coeff.d(ls,:).*u.^3;
+        
+        m=1;
+        t=((RightPoint(2)-LinkingSlope*RightPoint(1))- LeftResamp(m,2) + LinkingSlope*LeftResamp(m,1))/(LeftResamp(m+1,2)- LeftResamp(m,2)+ LinkingSlope*(LeftResamp(m,1)-LeftResamp(m+1,1)));
+        while m < size(LeftResamp,1) && (t < 0 || t > 1)
+            t=((RightPoint(2)-LinkingSlope*RightPoint(1))- LeftResamp(m,2) + LinkingSlope*LeftResamp(m,1))/(LeftResamp(m+1,2)- LeftResamp(m,2)+ LinkingSlope*(LeftResamp(m,1)-LeftResamp(m+1,1)));
+            m=m+1;
+        end
+        
+        LeftPoint= LeftResamp(m,:);
+        Boundaries.Points=[Boundaries.Points; RightPoint, LeftPoint];
     end
+    RDistance=RDistance+1;
+    LDistance=LDistance+1;
 end
 
 end
