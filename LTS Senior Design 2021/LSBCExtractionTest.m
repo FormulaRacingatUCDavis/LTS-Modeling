@@ -23,13 +23,12 @@ LAS.ShellIdx = [[(1:size(PE.BodySlip, 1))                            ; ones(1, s
                 [size(PE.BodySlip,1).*ones(1, size(PE.BodySlip, 2)-1); (2:size(PE.BodySlip, 2))                            ], ...
                 [(size(PE.BodySlip, 1)-1:-1:1)                       ; size(PE.BodySlip,2).*ones(1, size(PE.BodySlip, 1)-1)], ...
                 [ones(1, size(PE.BodySlip, 2)-2)                     ;(size(PE.BodySlip, 2)-1:-1:2)                        ]] ;         
-
       
-LAS.ShellIdx = repmat(1,1,1);
-LAS.BodySlip = PE.BodySlip( sub2ind( size(PE.BodySlip), LAS.ShellIdx(1,:), LAS.ShellIdx(2,:), ones(1,length(LAS.ShellIdx)), ones(1,length(LAS.ShellIdx)) ) ); 
+LAS.ShellIdx = repmat( LAS.ShellIdx, 1, 2 );
+LAS.BodySlip = PE.BodySlip( sub2ind( size(PE.BodySlip), ...
+    LAS.ShellIdx(1,:), LAS.ShellIdx(2,:), ones(1,length(LAS.ShellIdx)), ones(1,length(LAS.ShellIdx)) ) ); 
             
-%% LSBS Extraction (Indexing LongAcc == 0)
-% 
+%% LSBS Extraction (Indexing LongAcc == 0) 
 LSBS.Speed = LAS.Speed( PE.LongAcc == 0 );
 LSBS.LatAcc = LAS.LatAcc( PE.LongAcc == 0 );
 LSBS.YawAcc = LAS.YawAcc( PE.LongAcc == 0 );
@@ -37,6 +36,7 @@ LSBS.YawAcc = LAS.YawAcc( PE.LongAcc == 0 );
 scatter3( LSBS.Speed, LSBS.LatAcc, LSBS.YawAcc, 'k.' );
 
 %% LSBC Extraction (Indexing Speed = BaseSpeed from LSBS)
+
 
 %% GGV-V Extraction (Slicing where YawAcc = 0)
 
