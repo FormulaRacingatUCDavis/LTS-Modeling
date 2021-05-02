@@ -1,13 +1,16 @@
 function Curv = CurvatureTrace( Spline )
-resolution = 1;
-t=0;
+resolution = 5;
+t=resolution;
 s=1;
 
 cy = 2 * Spline.Coeff.c(s, 2); % d^2y/du^2
 cx = 2 * Spline.Coeff.c(s, 1); % d^2x/du^2
 c = cy/cx; % d^2y/dx^2
+if cx == 0
+    c = 0;
+end
 Curv = [c, t];
-while t < Spline.Distance(end)
+while t <= Spline.Distance(end)
     while t > Spline.Distance(s*1000)
         s=s+1;
     end
