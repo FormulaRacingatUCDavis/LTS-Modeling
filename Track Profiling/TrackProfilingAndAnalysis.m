@@ -47,12 +47,13 @@ else
     Scale.Ratio = Scale.Length ./ Scale.Pixels;
     
     %% Boundary or Arbitrary Spline
-    SplineType= input('Enter 1 to select arbitrary spline, 2 to define course boundaries');
+    SplineType= input('Enter 1 to select arbitrary spline, 2 to define course boundaries: ');
     switch SplineType
         case 1
             %% Spline Creation  
             [Points, Spline] = SelectSpline( Image, Scale, RadiusThresh );
             Spline.Length = Spline.Length - Spline.Length(1,:); %moved out of funct spline generation for course boundary purposes
+            
             %% Corner Correction
             Spline = CornerSmoothing( Spline, RadiusThresh );
         case 2
@@ -60,16 +61,21 @@ else
             disp('Select points along the right boundary')
             
             [RightPoints, RightSpline]=SelectSpline( Image, Scale, RadiusThresh );
-            RightSpline=CornerSmoothing( RightSpline, RadiusThresh );
+            RightSpline = CornerSmoothing( RightSpline, RadiusThresh );
+            
             %% Define Left Boundary
             disp('Select points along the left boundary')
             
             [LeftPoints, LeftSpline]=SelectSpline( Image, Scale, RadiusThresh );
-            LeftSpline=CornerSmoothing( LeftSpline, RadiusThresh );
+            LeftSpline = CornerSmoothing( LeftSpline, RadiusThresh );
+            
             %% Linking and Discretizing
-            Boundaries=Discretize( RightSpline, LeftSpline );
+            % resample boundaries, orient, link boundary
+            
+            Boundaries = Discretize( RightSpline, LeftSpline );
+            
         case 3
-            %%test
+            %% test
             Boundaries=Discretize( RightSpline, LeftSpline );
     end
 end
@@ -173,58 +179,58 @@ function [Points, Spline] = SelectSpline( Image, Scale, RadiusThresh )
             scatter( Spline.Pixels(abs(Spline.Radius)<RadiusThresh,1), Spline.Pixels(abs(Spline.Radius)<RadiusThresh,2), 2, 'r' );
         end
     end
+end
 
-    function Spline = SplineGeneration( Points, Scale )
-        % Compute Control Derivatives
-        D = zeros( size(Points) ); 
-        for j = 1 : size(Points,2)
-            A = diag( 4*ones( size(Points,1)  ,1 )   ) + ...
-                diag(   ones( size(Points,1)-1,1 ),-1) + ...
-                diag(   ones( size(Points,1)-1,1 ), 1);
+function Spline = SplineGeneration( Points, Scale )
+    % Compute Control Derivatives
+    D = zeros( size(Points) ); 
+    for j = 1 : size(Points,2)
+        A = diag( 4*ones( size(Points,1)  ,1 )   ) + ...
+            diag(   ones( size(Points,1)-1,1 ),-1) + ...
+            diag(   ones( size(Points,1)-1,1 ), 1);
 
-            A(1  ,1  ) = 2;
-            A(end,end) = 2;
+        A(1  ,1  ) = 2;
+        A(end,end) = 2;
 
-            b          = zeros( size(Points,1),1 );
-            b(1)       = 3*( Points(2    ,j) - Points(1      ,j) );
-            b(2:end-1) = 3*( Points(3:end,j) - Points(1:end-2,j) );
-            b(end)     = 3*( Points(end  ,j) - Points(end-1  ,j) );
+        b          = zeros( size(Points,1),1 );
+        b(1)       = 3*( Points(2    ,j) - Points(1      ,j) );
+        b(2:end-1) = 3*( Points(3:end,j) - Points(1:end-2,j) );
+        b(end)     = 3*( Points(end  ,j) - Points(end-1  ,j) );
 
-            D(:,j) = A\b;
-        end
-
-        Spline.Coeff.a = Points(1:end-1,:);
-        Spline.Coeff.b = D(1:end-1,:);
-        Spline.Coeff.c = 3*(Points(2:end  ,:) - Points(1:end-1,:)) - 2*D(1:end-1,:) - D(2:end,:);
-        Spline.Coeff.d = 2*(Points(1:end-1,:) - Points(2:end  ,:)) +   D(1:end-1,:) + D(2:end,:);
-
-        u = linspace(0,1,1000)';
-        Spline.Pixels = [];
-        d             = [];
-        c             = [];
-
-        for i = 1 : size(Points,1)-1
-            pi = Spline.Coeff.a(i,:)       + Spline.Coeff.b(i,:).*u   + ...
-                 Spline.Coeff.c(i,:).*u.^2 + Spline.Coeff.d(i,:).*u.^3;  
-
-            di =    Spline.Coeff.b(i,:) + 2.*Spline.Coeff.c(i,:) .* u + 3.*Spline.Coeff.d(i,:) .* u.^2;
-            ci = 2.*Spline.Coeff.c(i,:) + 6.*Spline.Coeff.d(i,:) .* u;
-
-            Spline.Pixels = [Spline.Pixels; pi];
-            d = [d; di]; %#ok<AGROW>
-            c = [c; ci]; %#ok<AGROW>
-        end
-
-        Spline.Length = Spline.Pixels .* Scale.Ratio;
-        
-
-        Spline.Distance = zeros( size(Spline.Length,1), 1 );
-        for i = 2 : size(Spline.Length,1)
-            Spline.Distance(i) = Spline.Distance(i-1) + norm( Spline.Length(i,:)-Spline.Length(i-1,:), 2 );
-        end
-
-        Spline.Radius = (d(:,1).^2 + d(:,2).^2).^(3/2) ./ (c(:,1).*d(:,2) - c(:,2).*d(:,1));
+        D(:,j) = A\b;
     end
+
+    Spline.Coeff.a = Points(1:end-1,:);
+    Spline.Coeff.b = D(1:end-1,:);
+    Spline.Coeff.c = 3*(Points(2:end  ,:) - Points(1:end-1,:)) - 2*D(1:end-1,:) - D(2:end,:);
+    Spline.Coeff.d = 2*(Points(1:end-1,:) - Points(2:end  ,:)) +   D(1:end-1,:) + D(2:end,:);
+
+    u = linspace(0,1,1000)';
+    Spline.Pixels = [];
+    d             = [];
+    c             = [];
+
+    for i = 1 : size(Points,1)-1
+        pi = Spline.Coeff.a(i,:)       + Spline.Coeff.b(i,:).*u   + ...
+             Spline.Coeff.c(i,:).*u.^2 + Spline.Coeff.d(i,:).*u.^3;  
+
+        di =    Spline.Coeff.b(i,:) + 2.*Spline.Coeff.c(i,:) .* u + 3.*Spline.Coeff.d(i,:) .* u.^2;
+        ci = 2.*Spline.Coeff.c(i,:) + 6.*Spline.Coeff.d(i,:) .* u;
+
+        Spline.Pixels = [Spline.Pixels; pi];
+        d = [d; di]; %#ok<AGROW>
+        c = [c; ci]; %#ok<AGROW>
+    end
+
+    Spline.Length = Spline.Pixels .* Scale.Ratio;
+
+
+    Spline.Distance = zeros( size(Spline.Length,1), 1 );
+    for i = 2 : size(Spline.Length,1)
+        Spline.Distance(i) = Spline.Distance(i-1) + norm( Spline.Length(i,:)-Spline.Length(i-1,:), 2 );
+    end
+
+    Spline.Radius = (d(:,1).^2 + d(:,2).^2).^(3/2) ./ (c(:,1).*d(:,2) - c(:,2).*d(:,1));
 end
 
 function Spline = CornerSmoothing( Spline, RadiusThresh )
@@ -266,6 +272,73 @@ function Spline = CornerSmoothing( Spline, RadiusThresh )
                 sign( Spline.Radius(Entry.Idx(i)) ) .* yData; 
         end
     end
+end
+
+function Boundaries = BoundaryDefine( RightPoints, LeftPoints )
+RightSpline = SplineGeneration( RightPoints );
+LeftSpline = SplineGeneration( LeftPoints );
+RDistance = 1;
+LDistance = 1;
+
+Boundaries.Points = [RightPoints(1,:), LeftPoints(1,:)];
+
+rs = 1; % Index of RightPoints
+ls = 1; % Index of LeftPoints
+i = 1; % Index of RightResamp.Distance/RightResamp.Length
+n = 1; % Index of LeftResamp.Distance/LeftResamp.Length
+
+RightSlope = 0;
+LeftSlope = 0;
+while RDistance < RightSpline.Distance(end) && LDistance < LeftSpline.Distance(end)
+    RightSlopeOld = RightSlope;
+    LeftSlopeOld = LeftSlope;
+    
+    rsIncrease = 0;
+    while RDistance >= RightSpline.Distance(rs*1000)
+        rs = rs + 1;
+        rsIncrease = rsIncrease + 1;
+    end
+    lsIncrease = 0;
+    while LDistance >= LeftSpline.Distance(ls*1000)
+        ls = ls + 1;
+        lsIncrease = lsIncrease + 1;
+    end
+    
+    LeftResamp = SplineResample(LeftSpline, ls);
+    RightResamp = SplineResample(RightSpline,rs);
+    
+    while RDistance > RightResamp.Distance(i)
+        i=i+1;
+    end
+    while LDistance > LeftResamp.Distance(n)
+        n=n+1;
+    end
+    
+    RightSlope=( RightResamp.Length(i+1,2) - RightResamp.Length(i,2) ) / ( RightResamp.Length(i+1,1) - RightResamp.Length(i,1) );
+    LeftSlope=( LeftResamp.Length(n+1,2) - LeftResamp.Length(n,2) ) / ( LeftResamp.Length(n+1,1) - LeftResamp.Length(n,1) );
+    
+    % Average curvature to determine turn direction
+    RightCurvature=( RightResamp.Length(i+1,2) -2*RightResamp.Length(i,2) + RightResamp.Length(i-1,2) ) ...
+        / ( RightResamp.Length(i+1,1) -2*RightResamp.Length(i,1) + RightResamp.Length(i-1,1) );
+    LeftCurvature=( LeftResamp.Length(n+1,2) -2*LeftResamp.Length(n,2) + LeftResamp.Length(n-1,2) )...
+        / ( LeftResamp.Length(n+1,1) -2*LeftResamp.Length(n,2) + LeftResamp.Length(n-1,1) );
+    AvgCurv=( RightCurvature + LeftCurvature ) / 2;
+    
+    if AvgCurv >= 0
+        
+        
+    else
+        
+        
+    end
+end
+end
+
+function Resamp = SplineResample( Spline, i )
+%% Resamples with constant arc length
+u = linspace(0, 1, round( Spline.Distance(i*1000) - Spline.Distance((i-1)*1000 +1))*100)';
+Resamp.Length = Spline.Coeff.a(i,:) + Spline.Coeff.b(i,:).* u + Spline.Coeff.c(i,:).* u.^2 + Spline.Coeff.d(i,:).* u^3;
+Resamp.Distance = linspace( Spline.Distance((i-1)*1000 +1), Spline.Distance(i*1000), size(Resamp.Length,1));
 end
 
 function Boundaries = Discretize( RightSpline, LeftSpline )
@@ -409,9 +482,11 @@ while RDistance < RightSpline.Distance(end)  &&  LDistance < LeftSpline.Distance
         RightResamp= RightSpline.Coeff.a(rs,:) + RightSpline.Coeff.b(rs,:).*u + RightSpline.Coeff.c(rs,:).*u.^2 + RightSpline.Coeff.d(rs,:).*u.^3;
         
         m=1;
-        t=((LeftPoint(2)-LinkingSlope*LeftPoint(1))- RightResamp(m,2) + LinkingSlope*RightResamp(m,1))/(RightResamp(m+1,2)- RightResamp(m,2)+ LinkingSlope*(RightResamp(m,1)-RightResamp(m+1)));
+        t=((LeftPoint(2)-LinkingSlope*LeftPoint(1))- RightResamp(m,2) + LinkingSlope*RightResamp(m,1))/...
+            (RightResamp(m+1,2)- RightResamp(m,2)+ LinkingSlope*(RightResamp(m,1)-RightResamp(m+1)));
         while m <= size(RightResamp,1) && (t < 0 || t > 1)
-            t=((LeftPoint(2)-LinkingSlope*LeftPoint(1))- RightResamp(m,2) + LinkingSlope*RightResamp(m,1))/(RightResamp(m+1,2)- RightResamp(m,2)+ LinkingSlope*(RightResamp(m,1)-RightResamp(m+1)));
+            t=((LeftPoint(2)-LinkingSlope*LeftPoint(1))- RightResamp(m,2) + LinkingSlope*RightResamp(m,1))/...
+                (RightResamp(m+1,2)- RightResamp(m,2)+ LinkingSlope*(RightResamp(m,1)-RightResamp(m+1)));
             m=m+1;
         end
         
@@ -434,7 +509,8 @@ while RDistance < RightSpline.Distance(end)  &&  LDistance < LeftSpline.Distance
         % algorithm source https://www.mathworks.com/matlabcentral/answers/17039-line-and-a-line-segment-intersection
         m=1;
         while m < size(SplineIden,1)
-            t=((RightPoint(2)-LinkingSlope*RightPoint(1))- SplineIden(m,2) + LinkingSlope*SplineIden(m,1))/(SplineIden(m+1,2)- SplineIden(m,2)+ LinkingSlope*(SplineIden(m,1)-SplineIden(m+1,1)));
+            t=((RightPoint(2)-LinkingSlope*RightPoint(1))- SplineIden(m,2) + LinkingSlope*SplineIden(m,1))/...
+                (SplineIden(m+1,2)- SplineIden(m,2)+ LinkingSlope*(SplineIden(m,1)-SplineIden(m+1,1)));
             m=m+1;
             if t < 1 && t > 0
                 break
@@ -456,7 +532,8 @@ while RDistance < RightSpline.Distance(end)  &&  LDistance < LeftSpline.Distance
         m=1;
         t=((RightPoint(2)-LinkingSlope*RightPoint(1))- LeftResamp(m,2) + LinkingSlope*LeftResamp(m,1))/(LeftResamp(m+1,2)- LeftResamp(m,2)+ LinkingSlope*(LeftResamp(m,1)-LeftResamp(m+1,1)));
         while m < size(LeftResamp,1) && (t < 0 || t > 1)
-            t=((RightPoint(2)-LinkingSlope*RightPoint(1))- LeftResamp(m,2) + LinkingSlope*LeftResamp(m,1))/(LeftResamp(m+1,2)- LeftResamp(m,2)+ LinkingSlope*(LeftResamp(m,1)-LeftResamp(m+1,1)));
+            t=((RightPoint(2)-LinkingSlope*RightPoint(1))- LeftResamp(m,2) + LinkingSlope*LeftResamp(m,1))/...
+                (LeftResamp(m+1,2)- LeftResamp(m,2)+ LinkingSlope*(LeftResamp(m,1)-LeftResamp(m+1,1)));
             m=m+1;
         end
         
