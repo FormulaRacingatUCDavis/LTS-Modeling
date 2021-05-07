@@ -4,7 +4,7 @@ function [LAS, BSBS, BSBC, GGV] = ConstraintExtraction( PE )
 % vehicle performance limits.
 % 
 % Inputs:
-%   PE - (struct) Performance Envelope
+%   PE   - (struct) Performance Envelope
 %       .(field) - (n,m,p,q numeric) Arbritrary Dynamic State 
 % 
 % Outputs:
