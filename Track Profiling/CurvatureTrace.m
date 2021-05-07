@@ -20,6 +20,7 @@ while t <= Spline.Distance(end)
     dx = Spline.Coeff.b(s,1) + 2 * Spline.Coeff.c(s,1) * u + 3 * Spline.Coeff.d(s,1) * u^2;
     cy = 2 * Spline.Coeff.c(s, 2) + 6 * Spline.Coeff.d(s,2) * u;
     cx = 2 * Spline.Coeff.c(s, 1) + 6 * Spline.Coeff.d(s,1) * u;
+    
     Track.Curvature = [Track.Curvature; (dx*cy - dy*cx)/(dx^2+dy^2)^(3/2)];
     Track.Distance = [Track.Distance; t];
     t = t + resolution;
