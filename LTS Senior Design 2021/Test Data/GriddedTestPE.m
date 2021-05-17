@@ -27,12 +27,34 @@ Wheelbase  = 1.525; % Wheelbase [m]
 Mass       = 265;   % Vehicle Mass [kg]
 YawInertia = 130;   % Vehicle Yaw Inertia [kg-m^2]
 
-%% Gridded Inputs
-BodySlip = linspace(-8,0,3); 
-BodySlip = [BodySlip, abs(BodySlip(end-1:-1:1))];
+%% Base MMM Data
+% MMM data taken from RCVD and scaled to be reflective of FSAE Car
 
-Steer = linspace(-120,0,2); 
-Steer = [Steer, abs(Steer(end-1:-1:1))];
+%%% Inputting Raw RCVD Data
+MMM.Steer = linspace(-120,0,2); 
+MMM.Steer = [MMM.Steer, abs(MMM.Steer(end-1:-1:1))];
+
+MMM.BodySlip = linspace(-8,0,3); 
+MMM.BodySlip = [MMM.BodySlip, abs(MMM.BodySlip(end-1:-1:1))];
+
+[MMM.BodySlip, MMM.Steer] = meshgrid( MMM.BodySlip, MMM.Steer );
+
+MMM.LatAcc = [ 0.90,-0.05,-0.60,-0.85,-0.90; ...
+               0.90, 0.67, 0.00,-0.67,-0.90; ...
+               0.90, 0.85, 0.60, 0.05,-0.90];
+
+MMM.YawAcc = [-0.09,-0.33,-0.12, 0.04, 0.09; ...
+              -0.09,-0.10, 0.00, 0.10, 0.09; ...
+              -0.09,-0.04, 0.12, 0.33, 0.09];
+
+%%% Scaling RCVD Data
+MMM.LatAcc = MMM.LatAcc .* Base.LatGrip ./ max( abs(MMM.LatAcc), [], 'all' );
+MMM.YawAcc = MMM.YawAcc .* Wheelbase .* Mass .* 9.81 ./ YawInertia;
+MMM.YawAcc = MMM.YawAcc .* Base.Rotation ./ max( abs(MMM.YawAcc), [], 'all' );
+    
+%% Gridded Inputs
+Steer    = linspace( min(MMM.Steer   ,[],'all'), max(MMM.Steer   ,[],'all'), 25 ); 
+BodySlip = linspace( min(MMM.BodySlip,[],'all'), max(MMM.BodySlip,[],'all'), 17 ); 
 
 n = 10;
 LongAcc = [linspace(-Base.BrakeGrip,0,n), linspace(0+Base.Traction/(n-1),Base.Traction,(n-1))];
@@ -41,25 +63,12 @@ Speed = 5 : 5 : Top.Speed;
 
 [Steer, BodySlip, Speed, LongAcc] = ndgrid( Steer, BodySlip, Speed, LongAcc );
 
-%% Base MMM Data
-% MMM data taken from RCVD and scaled to be reflective of FSAE Car
+%% Resample MMM Data
+LatAcc = interp2( MMM.BodySlip, MMM.Steer, MMM.LatAcc, squeeze(BodySlip(:,:,1,1)), squeeze(Steer(:,:,1,1)) );
+LatAcc = repmat( LatAcc, 1, 1, size(Speed, 3), size(LongAcc, 4) );
 
-%%% Inputting Raw RCVD Data
-LatAcc = repmat( [ 0.90, 0.90, 0.90; ...
-                  -0.05, 0.67, 0.85; ...
-                  -0.60, 0.00, 0.60; ...
-                  -0.85,-0.67, 0.05; ...
-                  -0.90,-0.90,-0.90]', 1, 1, size(Speed,3), size(LongAcc,4) );
- 
-YawAcc = repmat( [-0.09,-0.09,-0.09; ...
-                  -0.33,-0.10,-0.04; ...
-                  -0.12, 0.00, 0.12; ...
-                   0.04, 0.10, 0.33; ...
-                   0.09, 0.09, 0.09]', 1, 1, size(Speed,3), size(LongAcc,4) );
-
-LatAcc = LatAcc .* Base.LatGrip ./ max( abs(LatAcc), [], 'all' );
-YawAcc = YawAcc .* Wheelbase .* Mass .* 9.81 ./ YawInertia;
-    YawAcc = YawAcc .* Base.Rotation ./ max( abs(YawAcc), [], 'all' );
+YawAcc = interp2( MMM.BodySlip, MMM.Steer, MMM.YawAcc, squeeze(BodySlip(:,:,1,1)), squeeze(Steer(:,:,1,1)) );
+YawAcc = repmat( YawAcc, 1, 1, size(Speed, 3), size(LongAcc, 4) );
 
 %% Speed Dependent Effects
 %%% Scaling Coefficients
