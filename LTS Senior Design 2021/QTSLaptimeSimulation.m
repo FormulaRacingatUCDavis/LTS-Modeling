@@ -7,6 +7,8 @@ if nargin == 0
     Track = load('2015-18_Lincoln_AutoX.mat');
     Track = Track.Track2;
     Track.Event = 'AutoCross';
+    Track.Heading = atan2d( gradient(Track.Coordinates(:,1)), gradient(Track.Coordinates(:,2)) );
+    Track.Heading( Track.Heading < 0 ) = Track.Heading( Track.Heading < 0 ) + 360;
 end
 
 %% Vehicle Constraint Extraction
@@ -20,7 +22,7 @@ ds = diff( Track.Distance([1 2]) );
 Solution.sDot = min( max(Vehicle.PE.Speed, [], 'all'), ... % Max Top Speed
     sqrt( abs(Vehicle.TrimLat ./ Track.Curvature) ) );
 
-Solution.sDDot = [diff( Solution.sDot.^2 ) ./ (2*ds); 0];
+Solution.sDDot = zeros( size(Track.Distance) );
 
 Field = fieldnames(Vehicle.PE);
 for f = 1:numel(Field)
@@ -28,11 +30,12 @@ for f = 1:numel(Field)
 end
 
 drhods = gradient( Track.Curvature, ds );
+dchids = gradient( deg2rad(Track.Heading), ds );
 
 %% Determining Initial Track Index
 if strcmpi( Track.Event, 'Autocross' )
     IdxVector = 1:length( Track.Distance );
-    Solution.sDot(1) = 13;
+    Solution.sDot(1) = 0.1;
 elseif strcmpi( Track.Event, 'Endurance' )
     [~, ApexIdx] = findpeaks( -Solution.sDot );
     IdxVector = [ApexIdx(1):length( Track.Distance ), 1:ApexIdx(1)-1];
@@ -62,8 +65,10 @@ while Correction > 0.02 % Iterate Until Body Slip Correction-Based Convergence
         %%% Check if Required Performance State is Feasible
         if FeasibleVehicleState( Vehicle, Solution, i )
             %%% Accelerate and Step Forward
-            Solution = MaximizeAcceleration( Track, Vehicle, Solution, i, '+', ...
-                drhods, d2betads2 );
+            Solution = MaximizeAcceleration( Track, Vehicle, Solution, i, '+' );
+            
+            Solution.sDot(i+1) = sqrt( Solution.sDot(i)^2 + 2*Solution.sDDot(i)*ds );
+            Solution.BodySlip(i+1) = sqrt( Solution.BodySlip(i)^2 + 2*rad2deg(Solution.BodySlipDot(i))*ds );
         else
             %%% Compute Maximum Feasible Speed
             Solution = MaximizeSpeed( Track, Vehicle, Solution, i );
@@ -73,6 +78,7 @@ while Correction > 0.02 % Iterate Until Body Slip Correction-Based Convergence
     end
 end
 
+%% Vehicle State Feasibility
 function IsFeasible = FeasibleVehicleState( Vehicle, Solution, i )
     xDot = Solution.sDot(i) * cosd( Solution.BodySlip(i) ); % Longitudinal Velocity
     
@@ -116,25 +122,90 @@ function IsFeasible = FeasibleVehicleState( Vehicle, Solution, i )
     end
 end
 
-function Solution = MaximizeAcceleration( Track, Vehicle, Solution, i, Sign, drhods, d2betads2 )
+%% Maximizing Acceleration Given Speed
+function Solution = MaximizeAcceleration( Track, Vehicle, Solution, i, Sign )
     %%% Variable Allocation
     sDot = Solution.sDot(i);
     rho = Track.Curvature(i);
     beta = Solution.BodySlip(i);
     
-    %%% Filter Mesh Points
+    xDot = sDot / cosd(beta);
     
+    %%% Interpolate Speed Condition
+    Speeds = squeeze( Vehicle.PE.Speed(1,1,:,1) );
+    
+    if xDot <= min( Vehicle.PE.Speed, [], 'all' )
+        LongAcc = squeeze( Vehicle.PE.LongAcc(:,:,1,:) );
+        LatAcc  = squeeze( Vehicle.PE.LatAcc(:,:,1,:) );
+        YawAcc  = squeeze( Vehicle.PE.YawAcc(:,:,1,:) );
+    else 
+        LongAcc = squeeze( interp1( Speeds, permute( Vehicle.PE.LongAcc, [3,1,2,4] ), xDot ) );
+        LatAcc  = squeeze( interp1( Speeds, permute( Vehicle.PE.LatAcc , [3,1,2,4] ), xDot ) );
+        YawAcc  = squeeze( interp1( Speeds, permute( Vehicle.PE.YawAcc , [3,1,2,4] ), xDot ) );
+    end
+    
+    %%% Interpolate Body Slip Condition
+    BodySlips = squeeze( Vehicle.PE.BodySlip(1,:,1,1) );
+        
+    LongAcc = squeeze( interp1( BodySlips, permute( LongAcc, [2,1,3] ), beta ) );
+    LatAcc  = squeeze( interp1( BodySlips, permute( LatAcc , [2,1,3] ), beta ) );
+    YawAcc  = squeeze( interp1( BodySlips, permute( YawAcc , [2,1,3] ), beta ) );
     
     %%% Compute Mesh Point Accelerations
-    MeshAcc = [ (Vehicle.LAS.LongAcc(:) + rho*sDot^2*sind(beta)) / cosd(beta), ...
-                (Vehicle.LAS.LatAcc(:)  - rho*sDot^2*cosd(beta)) / sind(beta), ...
-                (Vehicle.LAS.YawAcc(:)  - (drhods(i) - d2betads2(i))*sDot^2) / rho ];
+    MeshAcc = [ (LongAcc(:) + rho*sDot^2*sind(beta)) / cosd(beta), ...
+                (LatAcc(:)  - rho*sDot^2*cosd(beta)) / sind(beta), ...
+                (YawAcc(:)  - (drhods(i) - d2betads2(i))*sDot^2) / rho ];
             
     %%% Compute Optimal Mesh Points
     if strcmpi( Sign, '+' )
-        [sDDot, jOpt] = maxk( min( MeshAcc, [], 2 ), 5 );
+        [sDDot, jOpt] = maxk( min( MeshAcc, [], 2 ), 1 );
     else 
-        [sDDot, jOpt] = mink( max( MeshAcc, [], 2 ), 5 );
+        [sDDot, jOpt] = mink( max( MeshAcc, [], 2 ), 1 );
+    end
+    
+    figure
+    plot3( LongAcc, LatAcc, YawAcc, 'k' )
+    hold on
+    plot3( LongAcc', LatAcc', YawAcc', 'k' )
+    scatter3( LongAcc(jOpt), LatAcc(jOpt), YawAcc(jOpt), 'rx' )
+    fplot3( @(sDDot) sDDot.*cosd(beta) - rho.*sDot.^2.*sind(beta), ...
+            @(sDDot) rho.*sDot.^2.*cosd(beta) + sDDot.*sind(beta), ...
+            @(sDDot) (drhods(i) - d2betads2(i)).*sDot.^2 + rho.*sDDot, [-15 15], 'b')
+        
+    %%% Allocate Solution Fields
+    Solution.sDDot(i) = sDDot;
+    
+    for ff = 1:numel(Field)
+        if ~(strcmp( Field{ff}, 'BodySlip' ) || strcmp( Field{ff}, 'Speed' ))  
+            Solution.(Field{ff})(i) = Vehicle.LAS.(Field{ff})(jOpt); 
+        end
+    end
+    
+    %%% Compute Body Slip Derivative 
+    Solution.BodySlipDot(i) = dchids(i) * Solution.sDot(i) - ... 
+        trapz( Track.Distance(1:i), Solution.YawAcc(1:i) ./ Solution.sDot(i), 1 );
+end
+
+%% Maximizing Speed Given No Acceleration
+function Solution = MaximizeSpeed( Track, Vehicle, Solution, i )
+    %%% Variable Allocation
+    rho = Track.Curvature(i);
+    beta = Solution.BodySlip(i);
+    
+    %%% Compute Mesh Point Accelerations
+    MeshSpe2 = [(Vehicle.LAS.Speed(:)   ./ cosd(beta)).^2, ...
+                ...%-Vehicle.LAS.LongAcc(:) ./ rho*sind(beta), ...
+                 Vehicle.LAS.LatAcc(:)  ./ rho*cosd(beta), ...
+                 Vehicle.LAS.YawAcc(:)  ./ (drhods(i) - d2betads2(i))];
+            
+    %%% Compute Optimal Mesh Points
+    [sDot2, jOpt] = maxk( min( MeshSpe2, [], 2 ), 1 );
+    
+    %%% Allocate Solution
+    Solution.sDot(i) = sqrt(sDot2);
+    
+    for ff = 1:numel(Field)
+        Solution.(Field{ff})(i) = Vehicle.LAS.(Field{ff})(jOpt); 
     end
 end
 
