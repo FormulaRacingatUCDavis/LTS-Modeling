@@ -77,27 +77,33 @@ else
             BW = roipoly(Image.Raw);
             Mid = bwskel(BW);
             imshow(labeloverlay(Image.Raw, Mid))
-            Median = MedianOrdering(Mid, Scale);
+            MedianOverResolve = MedianOrdering(Mid, Scale);
+            Median = MedianOverResolve(1,:);
+            for j=1:round(size(MedianOverResolve,1) / 10)
+                Median = [Median; MedianOverResolve(j*10,:)];
+            end
+            MedianFit = csaps(Median(:,1),Median(:,2));
+            MedianSpline = MedianSample(MedianFit);
             
             %% Linking and Discretizing
-            % resample boundaries, orient, link boundary
             
-            Boundaries = BoundaryDefine( RightPoints, LeftPoints, RightSpline, LeftSpline, Scale );
+            Boundaries = BoundaryDefine( RightPoints, LeftPoints, RightSpline, LeftSpline, MedianSpline, Scale );
             
         case 3
             %% test
             
-            BW = roipoly(Image.Raw);
-            Mid = bwskel(BW);
-            imshow(labeloverlay(Image.Raw, Mid))
-            MedianOverResolve = MedianOrdering(Mid, Scale);
-            Median = MedianOverResolve(1,:);
-            for j=1:round(size(MedianOverResolve,1) / 5)
-                Median = [Median; MedianOverResolve(j*5,:)];
-            end
-            MedianFit = csaps(Median(:,1),Median(:,2));
-            plot(Median(:,1),Median(:,2))
-            Boundaries = BoundaryDefine( RightPoints, LeftPoints, RightSpline, LeftSpline, Scale );
+            %BW = roipoly(Image.Raw);
+            %Mid = bwskel(BW);
+            %imshow(labeloverlay(Image.Raw, Mid))
+            %MedianOverResolve = MedianOrdering(Mid);
+            %Median = MedianOverResolve(1,:);
+            %for j=1:floor(size(MedianOverResolve,1) / 10)
+            %    Median = [Median; MedianOverResolve(j*10,:)];
+            %end
+            %t = linspace( 1, size(Median, 1), size(Median, 1) );
+            %MedianFit = csaps(t, Median');
+            %MedianSpline = MedianSample(MedianFit, Scale);
+            Boundaries = BoundaryDefine( RightPoints, LeftPoints, RightSpline, LeftSpline, MedianSpline, Scale );
     end
 end
 
@@ -299,7 +305,7 @@ function Spline = CornerSmoothing( Spline, RadiusThresh )
     end
 end
 
-function Boundaries = BoundaryDefine( RightPoints, LeftPoints, RightSpline, LeftSpline, Scale )
+function Boundaries = BoundaryDefine( RightPoints, LeftPoints, RightSpline, LeftSpline, MedianSpline, Scale )
 %% Generates n X 4 boundary points (x,y,x,y) with reduced resolution for pathing procedure
 
 LinkCount=0;
@@ -307,191 +313,127 @@ LoopCount=0;
 DistanceFindFail=0;
 DistanceFindBounds=0;
 DistanceFindOscillate=0;
+Anomolies=0;
 
 RDistanceOld = 0;
 LDistanceOld = 0;
-RDistance = 1;
-LDistance = 1;
+Distance = 1;
+Increment = 5;
 
-Boundaries.Points = [RightPoints.Length(1,:), LeftPoints.Length(1,:)];
-link = Boundaries.Points;
-LeftIsInside = true;
+Boundaries.Points = [0,0,0,0];
 
-rs = 1; % Index of RightPoints
-ls = 1; % Index of LeftPoints
+i = 1; % Index of MedianSpline
 
-while RDistance < RightSpline.Distance(end) && LDistance < LeftSpline.Distance(end)
+while Distance <= MedianSpline.Distance(end)
     LoopCount=LoopCount+1;
     
-    rsIncrease = 0;
-    while RDistance > RightSpline.Distance(rs*1000)
-        rs = rs + 1;
-        rsIncrease = rsIncrease + 1;
-    end
-    
-    lsIncrease = 0;
-    while LDistance > LeftSpline.Distance(ls*1000)
-        ls = ls + 1;
-        lsIncrease = lsIncrease + 1;
-    end
-    
-    if rs > size( RightPoints.Length, 1) || ls > size( LeftPoints.Length, 1)
-        break
-    end
-    
-    LeftResamp = SplineResample(LeftSpline, ls, Scale);
-    RightResamp = SplineResample(RightSpline,rs, Scale);
-    i = 1; % Index of RightResamp
-    n = 1; % Index of LeftResamp
-    
-    if RDistance < RightResamp.Distance(1)
-        disp('wrong right spline selected')
-        continue
-    end
-    if LDistance < LeftResamp.Distance(1)
-        disp('wrong left spline selected')
-        continue
-    end
-    
-    while RDistance > RightResamp.Distance(i)
+    while Distance > MedianSpline.Distance(i)
         i=i+1;
     end
-    while LDistance > LeftResamp.Distance(n)
-        n=n+1;
-    end
     
-    if i+1 <= size(RightResamp.Length,1) && n+1 <= size(LeftResamp.Length,1) && n-1 > 0 && i-1 > 0
-        % Average curvature to determine turn direction
-        RightCurvature = Curvature(RightResamp, i);
-        LeftCurvature = Curvature(LeftResamp, n);
-        AvgCurv =( RightCurvature + LeftCurvature ) / 2;
-    end
+%    if i+1 <= size(MedianResamp.Length,1) && i-1 > 0
+%        % Curvature to determine turn direction
+%        Curvature = Curvature(MedianResamp, i);
+%    end
     
-    if AvgCurv <= 0
-        PrevInside = LeftIsInside;
-        LeftIsInside = true;
-        rs=rs-rsIncrease;
-        if size(link,1) == 1 && size(link,2) == 4
-            linkOld = [link(3:4), link(1:2)];
-        end
-        link = LinkSplines( LeftResamp, RightSpline, RightPoints.Length, n, rs, Scale, linkOld );
-        if link == false
-            disp('no right intersect found')
-            RDistance=RDistance+1;
-            LDistance=LDistance+1;
-        elseif link == true
-            disp('no right point found')
-            RDistance=RDistance+1;
-            LDistance=LDistance+1;
-        elseif size(link) ~= [1,4]
-            disp('wrong link size')
-            disp(link)
-            RDistance=RDistance+1;
-            LDistance=LDistance+1;
-        else
-            Boundaries.Points = [Boundaries.Points; [link(3:4), link(1:2)]];
-            Diff = RightResamp.Length - link(3:4);
-            Index = 1;
-            minimum = norm([Diff(1,1), Diff(1,2)]);
-            for j=1:size(Diff,1)
-                if norm([Diff(j,1), Diff(j,2)]) < minimum
-                    minimum = norm([Diff(j,1), Diff(j,2)]);
-                    Index = j;
-                end
-            end
-            
-            if RightResamp.Distance(Index(1)) >= RDistanceOld
-                RDistanceOld = RightResamp.Distance(Index(1));
-                RDistance = RightResamp.Distance(Index(1)) + 1;
-                LinkCount=LinkCount+1;
-
-            elseif RightResamp.Distance(Index(1)) + 1 >= RDistanceOld
-                disp('distance found < distance old')
-                disp(RightResamp.Distance(Index(1)))
-                disp(RDistanceOld)
-                DistanceFindBounds = DistanceFindBounds + 1;
-                RDistance = RDistance + 1;
-            else
-                disp('distance found + 1 < distance old')
-                DistanceFindOscillate = DistanceFindOscillate + 1;
-                RDistance = RDistance + 1;
-            end
-            
-            LDistanceOld = LDistance;
-            LDistance=LDistance+1;
-        end
-        
+    [link, rs, ls] = LinkSplines( MedianSpline, i, RightSpline, LeftSpline, RightPoints, LeftPoints, Scale );
+    
+    if link == false
+        disp('no intersect found')
+        Distance = Distance + 1;
+    elseif link == true
+        disp('no point found')
+        Distance = Distance + 1;
+    elseif size(link) ~= [1,4]
+        disp('wrong link size')
+        disp(link)
+        Distance = Distance + 1;
+    elseif norm(link(1:2)-link(3:4)) > 1.5 * norm(Boundaries.Points(end,1:2) - Boundaries.Points(end,3:4))
+        disp('anomolous link generated')
+        Distance = Distance + 1;
+        Anomolies = Anomolies + 1;
     else
-        PrevInside = LeftIsInside;
-        LeftIsInside = false;
-        ls=ls-lsIncrease;
-        if size(link,1) == 1 && size(link,2) == 4
-            linkOld = link;
+        RightResamp = BoundaryResample(RightSpline, rs, Scale);
+        LeftResamp = BoundaryResample(LeftSpline, ls, Scale);
+        RDiff = RightResamp.Length - link(1:2);
+        LDiff = LeftResamp.Length - link(3:4);
+        Rmin = norm(RDiff(1,:),2);
+        Rindex = 1;
+        for j=1:size(RDiff,1)
+            if norm(RDiff(j,:),2) < Rmin
+                Rmin = norm(RDiff(j,:),2);
+                Rindex = j;
+            end
         end
-        link = LinkSplines( RightResamp, LeftSpline, LeftPoints.Length, i, ls, Scale, linkOld );
-        if link == false
-            disp('no left intersect found')
-            RDistance=RDistance+1;
-            LDistance=LDistance+1;
-        elseif link == true
-            disp('no left point found')
-            RDistance=RDistance+1;
-            LDistance=LDistance+1;
-        elseif size(link) ~= [1,4]
-            disp('wrong link size')
-            disp(link)
-            RDistance=RDistance+1;
-            LDistance=LDistance+1;
+        Lmin = norm(LDiff(1,:),2);
+        Lindex = 1;
+        for j=1:size(LDiff,1)
+            if norm(LDiff(j,:),2) < Lmin
+                Lmin = norm(LDiff(j,:),2);
+                Lindex = j;
+            end
+        end
+        RDistance = RightResamp.Distance(Rindex);
+        LDistance = LeftResamp.Distance(Lindex);
+        if RDistance < RDistanceOld || LDistance < LDistanceOld
+            disp('links intersect')
+            DistanceFindBounds = DistanceFindBounds + 1;
+            Distance = Distance + 1;
         else
-            
-            Boundaries.Points = [Boundaries.Points; [link(1:2), link(3:4)]];
-            Diff = LeftResamp.Length - link(3:4);
-            Index = 1;
-            minimum = norm([Diff(1,1), Diff(1,2)]);
-            for j=1:size(Diff,1)
-                if norm([Diff(j,1), Diff(j,2)]) < minimum
-                    minimum = norm([Diff(j,1), Diff(j,2)]);
-                    Index = j;
-                end
-            end
-
-            if LeftResamp.Distance(Index(1)) >= LDistanceOld
-                LDistanceOld = LeftResamp.Distance(Index(1));
-                LDistance = LeftResamp.Distance(Index(1)) + 1;
-                LinkCount=LinkCount+1;
-
-            elseif LeftResamp.Distance(Index(1)) + 1 >= LDistanceOld
-                disp('distance found < distance old')
-                disp(LeftResamp.Distance(Index(1)))
-                disp(LDistanceOld)
-                DistanceFindBounds = DistanceFindBounds + 1;
-                LDistance = LDistance + 1;
-            else
-                disp('distance found + 1 < distance old')
-                DistanceFindOscillate = DistanceFindOscillate + 1;
-                LDistance = LDistance + 1;
-            end
-
+            Boundaries.Points = [Boundaries.Points; link];
+            Distance = Distance + Increment;
+            LinkCount = LinkCount + 1;
             RDistanceOld = RDistance;
-            RDistance = RDistance+1;
+            LDistanceOld = LDistance;
         end
-        
     end
 end
+Boundaries.Points = Boundaries.Points(2:end,:);
 disp1=['points found: ',num2str(LinkCount)];
 disp2=['number of loops: ',num2str(LoopCount)];
 disp3=['distance find failures: ',num2str(DistanceFindFail)];
 disp4=['distance found < distance old: ',num2str(DistanceFindBounds)];
 disp5=['distance found + 1 < distance old: ',num2str(DistanceFindOscillate)]; 
+disp6=['anomolous links ignored: ', num2str(Anomolies)];
 disp(disp1)
 disp(disp2)
 disp(disp3)
 disp(disp4)
 disp(disp5)
+disp(disp6)
 for j=1:size(Boundaries.Points,1)
 plot([Boundaries.Points(j,1);Boundaries.Points(j,3)],[Boundaries.Points(j,2);Boundaries.Points(j,4)])
 hold on
 end
+end
+
+function Sample = MedianSample( MedianFit, Scale )
+t = linspace( MedianFit.breaks(1), MedianFit.breaks(end), 100 * MedianFit.pieces );
+v = fnval(MedianFit, t);
+Sample.Pixels = [ v(1,:)', v(2,:)'];
+Sample.Length = Sample.Pixels .* Scale.Ratio;
+Sample.Breaks = MedianFit.breaks;
+
+Sample.Distance = 0;
+for j=2:size(Sample.Length,1)
+    Sample.Distance = [Sample.Distance; norm( Sample.Length(j-1,:) - Sample.Length(j,:) ) + Sample.Distance(j-1)];
+end
+
+Sample.Coeff.a = [0,0];
+Sample.Coeff.b = [0,0];
+Sample.Coeff.c = [0,0];
+Sample.Coeff.d = [0,0];
+for j=1 : MedianFit.pieces
+    Sample.Coeff.a = [Sample.Coeff.a; MedianFit.coefs((j*2)-1:(j*2),4)'];
+    Sample.Coeff.b = [Sample.Coeff.b; MedianFit.coefs((j*2)-1:(j*2),3)'];
+    Sample.Coeff.c = [Sample.Coeff.c; MedianFit.coefs((j*2)-1:(j*2),2)'];
+    Sample.Coeff.d = [Sample.Coeff.d; MedianFit.coefs((j*2)-1:(j*2),1)'];
+end
+Sample.Coeff.a = Sample.Coeff.a(2:end, : );
+Sample.Coeff.b = Sample.Coeff.b(2:end, : );
+Sample.Coeff.c = Sample.Coeff.c(2:end, : );
+Sample.Coeff.d = Sample.Coeff.d(2:end, : );
+
 end
 
 function Curv = Curvature( Resamp, i )
@@ -503,7 +445,7 @@ cx = (Resamp.Length(i+1,1) - 2*Resamp.Length(i,1) + Resamp.Length(i-1,1)) / ((Re
 Curv = (dx*cy - dy*cx)/(dx^2+dy^2)^(3/2);
 end
 
-function Resamp = SplineResample( Spline, i, Scale )
+function Resamp = BoundaryResample( Spline, i, Scale )
 %% Resamples with constant arc length
 u = linspace(0, 1, round( Spline.Distance(i*1000) - Spline.Distance((i-1)*1000 +1))*100)';
 Resamp.Pixels = Spline.Coeff.a(i,:) + Spline.Coeff.b(i,:).* u + Spline.Coeff.c(i,:).* u.^2 + Spline.Coeff.d(i,:).* u.^3;
@@ -511,100 +453,159 @@ Resamp.Length = Resamp.Pixels .* Scale.Ratio;
 Resamp.Distance = linspace( Spline.Distance((i-1)*1000 +1), Spline.Distance(i*1000), size(Resamp.Length,1));
 end
 
-function link = LinkSplines( InsideResamp, OutsideSpline, OutsidePoints, i, os, Scale, linkOld )
-%% Input spline structure of outside, Resample of inside, points.Length of outside, and i/n for inside=RightSpline/LeftSpline
-
-if i+1 <= size(InsideResamp.Length, 1)
-    InsideSlope = ( InsideResamp.Length(i+1,2) - InsideResamp.Length(i,2) ) / ( InsideResamp.Length(i+1,1) - InsideResamp.Length(i,1) );
+function [link, rs, ls] = LinkSplines( MedianResamp, i, RightSpline, LeftSpline, RightPoints, LeftPoints, Scale )
+rs = 0;
+ls = 0;
+if i+1 <= size(MedianResamp.Length, 1)
+    MedianSlope = ( MedianResamp.Length(i+1,2) - MedianResamp.Length(i,2) ) ...
+        / ( MedianResamp.Length(i+1,1) - MedianResamp.Length(i,1) );
 else
-    InsideSlope = ( InsideResamp.Length(i,2) - InsideResamp.Length(i-1,2) ) / ( InsideResamp.Length(i,1) - InsideResamp.Length(i-1,1) );
+    MedianSlope = ( MedianResamp.Length(i,2) - MedianResamp.Length(i-1,2) ) ...
+        / ( MedianResamp.Length(i,1) - MedianResamp.Length(i-1,1) );
 end
-LinkingSlope = -1/InsideSlope;
-SplineIden = OutsidePoints;
+LinkingSlope = -1/MedianSlope;
+MedianPoint = MedianResamp.Length(i,:);
 
-m=1;
-intersects = 0;
+RightIntersects = FindCubics( MedianPoint, LinkingSlope, RightPoints.Length );
+LeftIntersects = FindCubics( MedianPoint, LinkingSlope, LeftPoints.Length );
 
-while m < size(SplineIden, 1)
-    t = ( ( InsideResamp.Length(i,2) - LinkingSlope * InsideResamp.Length(i,1) ) - SplineIden(m,2) + LinkingSlope * SplineIden(m,1) ) / ...
-        ( SplineIden(m+1,2) - SplineIden(m,2) + LinkingSlope * ( SplineIden(m,1) - SplineIden(m+1,1) ) );
-    if t < 1 && t > 0
-        intersects = [intersects; m];
-    end
-    m=m+1;
-end
-intersects = intersects(2:end);
-
-if size(intersects,1) == 0 || size(intersects,2)==0
+if size(RightIntersects,1) == 0 || size(RightIntersects,2) == 0 ...
+        || size(LeftIntersects,1) == 0 || size(LeftIntersects,2) == 0
     link = false;
 else
-    links = [0,0,0,0];
-    for j=1:size(intersects)
-        m = intersects(j);
-        F = @SplineIntersect;
-        x = fsolve(F, [SplineIden(m,1); SplineIden(m,2); 0]);
+    RightLinkPoints = [0,0];
+    rs = 0;
+    for j=1:size(RightIntersects)
+        m = RightIntersects(j);
+        F = @RightSplineIntersect;
+        x = fsolve(F, [RightPoints.Length(m,1);RightPoints.Length(m,2); 0]);
         if x(3) > 0 && x(3) < 1
-            if InsideSlope < 1 && InsideSlope > -1
-                if linkOld(1) <= linkOld(3)
-                    if InsideResamp.Length(i,1) < x(1)
-                        links = [links; InsideResamp.Length(i,1), InsideResamp.Length(i,2), x(1), x(2)];
-                    end
-                else
-                    if InsideResamp.Length(i,1) > x(1)
-                        links = [links; InsideResamp.Length(i,1), InsideResamp.Length(i,2), x(1), x(2)];
-                    end
-                end
-            else
-                if linkOld(2) <= linkOld(4)
-                    if InsideResamp.Length(i,2) < x(2)
-                        links = [links; InsideResamp.Length(i,1), InsideResamp.Length(i,2), x(1), x(2)];
-                    end
-                else
-                    if InsideResamp.Length(i,2) > x(2)
-                        links = [links; InsideResamp.Length(i,1), InsideResamp.Length(i,2), x(1), x(2)];
-                    end
-                end
-            end
+            RightLinkPoints = [RightLinkPoints; x(1), x(2)];
+            rs = [rs; m];
         end
     end
-    links = links(2:end,:);
-    if size(links,1) > 1
+    RightLinkPoints = RightLinkPoints(2:end,:);
+    rs = rs(2:end);
+    if size(RightLinkPoints,1) > 1
         width = 0;
-        for j=1:size(links,1)
-            v = links(j,1:2) - links(j,3:4);
+        for j=1:size(RightLinkPoints,1)
+            v = MedianResamp.Length(i,:) - RightLinkPoints(j,:);
             width = [width; norm(v)];
         end
         width = width(2:end);
-        k = min(width);
-        index = find(width==k);
-        disp('indexed link')
-        link = links(index,:);
-        disp(link)
-    elseif size(links,1) == 1
-        disp('single link')
-        link = links;
-        disp(link)
+        min = width(1);
+        index = 1;
+        for j=1:size(width)
+            if min > width(j)
+                min = width(j);
+                index = j;
+            end 
+        end
+        disp('indexed right link')
+        disp(index)
+        link = RightLinkPoints(index,:);
+        rs = rs(index);
+    elseif size(RightLinkPoints,1) == 1
+        disp('single right link')
+        link = RightLinkPoints;
     else
         link = true;
     end
 end
 
-function F = SplineIntersect(x)
-c = [x(1), x(2)];
-f1 = ( OutsideSpline.Coeff.a(m,:) + OutsideSpline.Coeff.b(m,:).*x(3) + OutsideSpline.Coeff.c(m,:).*x(3)^2 + OutsideSpline.Coeff.d(m,:).*x(3)^3 ) * Scale.Ratio - c;
-f2 = LinkingSlope*x(1) - LinkingSlope*InsideResamp.Length(i,1) + InsideResamp.Length(i,2) - x(2);
-F = [f1'; f2];
+disp(link)
+
+if size(link, 1) ~= 1 || size(link, 2) ~= 2
+    link = true;
+else
+    LeftLinkPoints = [0,0];
+    ls = 0;
+    for j=1:size(LeftIntersects)
+        m = LeftIntersects(j);
+        F = @LeftSplineIntersect;
+        x = fsolve(F, [LeftPoints.Length(m,1);LeftPoints.Length(m,2); 0]);
+        if x(3) > 0 && x(3) < 1
+            LeftLinkPoints = [LeftLinkPoints; x(1), x(2)];
+            ls = [ls; m];
+        end
+    end
+    LeftLinkPoints = LeftLinkPoints(2:end,:);
+    ls = ls(2:end);
+    if size(LeftLinkPoints,1) > 1
+        width = 0;
+        for j=1:size(LeftLinkPoints,1)
+            v = MedianResamp.Length(i,:) - LeftLinkPoints(j,:);
+            width = [width; norm(v)];
+        end
+        width = width(2:end);
+        min = width(1);
+        index = 1;
+        for j=1:size(width)
+            if min > width(j)
+                min = width(j);
+                index = j;
+            end 
+        end
+        disp('indexed left link')
+        disp(index)
+        disp(LeftLinkPoints(index,:))
+        link = [link, LeftLinkPoints(index,:)];
+        ls = ls(index);
+        if norm(MedianPoint - link(1:2)) > norm(link(1:2) - link(3:4)) || norm(MedianPoint - link(3:4)) > norm(link(1:2) - link(3:4))
+            link = true;
+        end
+    elseif size(LeftLinkPoints,1) == 1
+        disp('single left link')
+        disp(LeftLinkPoints)
+        link = [link, LeftLinkPoints];
+        if norm(MedianPoint - link(1:2)) > norm(link(1:2) - link(3:4)) || norm(MedianPoint - link(3:4)) > norm(link(1:2) - link(3:4))
+            link = true;
+        end
+    else
+        link = true;
+    end
 end
+
+
+    function intersects = FindCubics( MedianPoint, LinkingSlope, Points )
+        % Returns vector of all indeces of Points where intersects between point slope line and
+        % line segments between Points(m,:) and Points(m+1,:) occur
+        m=1;
+        intersects = 0;
+        
+        while m < size(Points, 1)
+            t = ( ( MedianPoint(2) - LinkingSlope * MedianPoint(1) ) - Points(m,2) + LinkingSlope * Points(m,1) ) / ...
+                ( Points(m+1,2) - Points(m,2) + LinkingSlope * ( Points(m,1) - Points(m+1,1) ) );
+            if t < 1 && t > 0
+                intersects = [intersects; m];
+            end
+            m=m+1;
+        end
+        intersects = intersects(2:end);
+        
+    end
+
+    function F = RightSplineIntersect(x)
+        c = [x(1), x(2)];
+        f1 = ( RightSpline.Coeff.a(m,:) + RightSpline.Coeff.b(m,:).*x(3) + RightSpline.Coeff.c(m,:).*x(3)^2 + RightSpline.Coeff.d(m,:).*x(3)^3 ) * Scale.Ratio - c;
+        f2 = LinkingSlope*x(1) - LinkingSlope*MedianResamp.Length(i,1) + MedianResamp.Length(i,2) - x(2);
+        F = [f1'; f2];
+    end
+
+    function F = LeftSplineIntersect(x)
+        c = [x(1), x(2)];
+        f2 = LinkingSlope*x(1) - LinkingSlope*MedianResamp.Length(i,1) + MedianResamp.Length(i,2) - x(2);
+        f1 = ( LeftSpline.Coeff.a(m,:) + LeftSpline.Coeff.b(m,:).*x(3) + LeftSpline.Coeff.c(m,:).*x(3)^2 + LeftSpline.Coeff.d(m,:).*x(3)^3 ) * Scale.Ratio - c;
+        F = [f1'; f2];
+    end
 
 end
 
-function Median = MedianOrdering(Mid, Scale)
+function Median = MedianOrdering( Mid )
 [my,mx] = find(Mid);
 Mid = [mx,my];
 [x,y] = getpts;
 CurrPoint = [round(x),round(y)];
-disp(Mid)
-disp(CurrPoint)
 Median = [0,0];
 for j=1:size(Mid,1)
         if CurrPoint(end,:) == Mid(j,:)
@@ -634,6 +635,6 @@ while size(Mid,1) > 1
     CurrPoint = Mid(Index,:);
 end
 
-Median = Median(2:end, :) .* Scale.Ratio;
+Median = Median(2:end, :);
 
 end
