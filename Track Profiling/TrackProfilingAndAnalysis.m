@@ -102,7 +102,7 @@ else
             %end
             %t = linspace( 1, size(Median, 1), size(Median, 1) );
             %MedianFit = csaps(t, Median');
-            %MedianSpline = MedianSample(MedianFit, Scale);
+            MedianSpline = MedianSample(MedianFit, Scale);
             Boundaries = BoundaryDefine( RightPoints, LeftPoints, RightSpline, LeftSpline, MedianSpline, Scale );
     end
 end
@@ -318,9 +318,9 @@ Anomolies=0;
 RDistanceOld = 0;
 LDistanceOld = 0;
 Distance = 1;
-Increment = 5;
+Increment = 6;
 
-Boundaries.Points = [0,0,0,0];
+Boundaries.Points = [RightPoints.Length(1,:), LeftPoints.Length(1,:)];
 
 i = 1; % Index of MedianSpline
 
