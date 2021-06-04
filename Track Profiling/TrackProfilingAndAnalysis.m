@@ -77,7 +77,7 @@ else
             BW = roipoly(Image.Raw);
             Mid = bwskel(BW);
             imshow(labeloverlay(Image.Raw, Mid))
-            MedianOverResolve = MedianOrdering(Mid, Scale);
+            MedianOverResolve = MedianOrdering(Mid);
             Median = MedianOverResolve(1,:);
             for j=1:round(size(MedianOverResolve,1) / 10)
                 Median = [Median; MedianOverResolve(j*10,:)];
@@ -94,14 +94,14 @@ else
             
             %BW = roipoly(Image.Raw);
             %Mid = bwskel(BW);
-            %imshow(labeloverlay(Image.Raw, Mid))
-            %MedianOverResolve = MedianOrdering(Mid);
-            %Median = MedianOverResolve(1,:);
-            %for j=1:floor(size(MedianOverResolve,1) / 10)
-            %    Median = [Median; MedianOverResolve(j*10,:)];
-            %end
-            %t = linspace( 1, size(Median, 1), size(Median, 1) );
-            %MedianFit = csaps(t, Median');
+            imshow(labeloverlay(Image.Raw, Mid))
+            MedianOverResolve = MedianOrdering(Mid);
+            Median = MedianOverResolve(1,:);
+            for j=1:floor(size(MedianOverResolve,1) / 10)
+                Median = [Median; MedianOverResolve(j*10,:)];
+            end
+            t = linspace( 1, size(Median, 1), size(Median, 1) );
+            MedianFit = csaps(t, Median');
             MedianSpline = MedianSample(MedianFit, Scale);
             Boundaries = BoundaryDefine( RightPoints, LeftPoints, RightSpline, LeftSpline, MedianSpline, Scale );
     end
@@ -318,7 +318,7 @@ Anomolies=0;
 RDistanceOld = 0;
 LDistanceOld = 0;
 Distance = 1;
-Increment = 6;
+Increment = 5;
 
 Boundaries.Points = [RightPoints.Length(1,:), LeftPoints.Length(1,:)];
 
@@ -348,7 +348,7 @@ while Distance <= MedianSpline.Distance(end)
         disp('wrong link size')
         disp(link)
         Distance = Distance + 1;
-    elseif norm(link(1:2)-link(3:4)) > 1.5 * norm(Boundaries.Points(end,1:2) - Boundaries.Points(end,3:4))
+    elseif norm(link(1:2)-link(3:4)) > 2 * norm(Boundaries.Points(end,1:2) - Boundaries.Points(end,3:4))
         disp('anomolous link generated')
         Distance = Distance + 1;
         Anomolies = Anomolies + 1;
