@@ -793,93 +793,25 @@ function [v_next,ax,ay,tps,bps,overshoot] = vehicle_model_comb(veh,tr,v,v_max_ne
         driven_wheels = 4 ;
     end
     
-    %% external forces
+    %% current lat acc
     
-    % Mass
-    M = veh.M ;
-    % normal load on all wheels
-    Wz = M*g*cosd(bank)*cosd(incl) ;
-    % induced weight from banking and inclination
-    Wy = -M*g*sind(bank) ;
-    Wx = M*g*sind(incl) ;
-    % aero forces
-    Aero_Df = 1/2*veh.rho*veh.factor_Cl*veh.Cl*veh.A*v^2 ;
-    Aero_Dr = 1/2*veh.rho*veh.factor_Cd*veh.Cd*veh.A*v^2 ;
-    % rolling resistance
-    Roll_Dr = veh.Cr*(-Aero_Df+Wz) ;
-    % normal load on driven wheels
-    Wd = (factor_drive*Wz+(-factor_aero*Aero_Df))/driven_wheels ;
-    
+    ay = v^2*r+g*sind(bank) ;
+
     %% overshoot acceleration
     
     % maximum allowed long acc to not overshoot at next point
     ax_max = mode*(v_max_next^2-v^2)/2/dx ;
-    % drag acceleration
-    ax_drag = (Aero_Dr+Roll_Dr+Wx)/M ;
-    % ovesrhoot acceleration limit
-	ax_needed = ax_max-ax_drag ;
-    
-    %% current lat acc
-    
-    ay = v^2*r+g*sind(bank) ;
-    
-    %% tyre forces
-    
-    % longitudinal tyre coefficients
-    dmy = factor_grip*veh.sens_y ;
-    muy = factor_grip*veh.mu_y ;
-    Ny = veh.mu_y_M*g ;
-    % longitudinal tyre coefficients
-    dmx = factor_grip*veh.sens_x ;
-    mux = factor_grip*veh.mu_x ;
-    Nx = veh.mu_x_M*g ;
-    % friction ellipse multiplier
-    if sign(ay)~=0 % in corner or compensating for banking
-        % max lat acc available from tyres
-        ay_max = 1/M*(sign(ay)*(muy+dmy*(Ny-(Wz-Aero_Df)/4))*(Wz-Aero_Df)+Wy) ;
-        % max combined long acc available from tyres
-        if abs(ay/ay_max)>1 % checking if vehicle overshot (should not happen, but check exists to exclude complex numbers in solution from friction ellipse)
-            ellipse_multi = 0 ;
-        else
-            ellipse_multi = sqrt(1-(ay/ay_max)^2) ; % friction ellipse
-        end
-    else % in straight or no compensation for banking needed
-        ellipse_multi = 1 ;
-    end
-    
-    %% calculating driver inputs
-    
-    if ax_needed>=0 % need tps
-        % max pure long acc available from driven tyres
-        ax_tyre_max = 1/M*(mux+dmx*(Nx-Wd))*Wd*driven_wheels ;
-        % max combined long acc available from driven tyres
-        ax_tyre = ax_tyre_max*ellipse_multi ;
-        % getting power limit from engine
-        ax_power_limit = 1/M*(interp1(veh.vehicle_speed,veh.factor_power*veh.fx_engine,v,'linear',0)) ;
-        % getting tps value
-        scale = min([ax_tyre,ax_needed]/ax_power_limit) ;
-        tps = max([min([1,scale]),0]) ; % making sure its positive
-        bps = 0 ; % setting brake pressure to 0
-        % final long acc command
-        ax_com = tps*ax_power_limit ;
-    else % need braking
-        % max pure long acc available from all tyres
-        ax_tyre_max = -1/M*(mux+dmx*(Nx-(Wz-Aero_Df)/4))*(Wz-Aero_Df) ;
-        % max comb long acc available from all tyres
-        ax_tyre = ax_tyre_max*ellipse_multi ;
-        % tyre braking force
-        fx_tyre = min(-[ax_tyre,ax_needed])*M ;
-        % getting brake input
-        bps = max([fx_tyre,0])*veh.beta ; % making sure its positive
-        tps = 0 ; % seting throttle to 0
-        % final long acc command
-        ax_com = -min(-[ax_tyre,ax_needed]) ;
-    end
-    
+
+    %% find ax
+
+    ax = interpulateGGV(veh.GGV, v, ay);
+
+
     %% final results
     
-    % total vehicle long acc
-    ax = ax_com+ax_drag ;
+    tps = 0;
+    bps = 0;
+
     % next speed value
     v_next = sqrt(v^2+2*mode*ax*tr.dx(j)) ;
     % correcting tps for full throttle when at v_max on straights
