@@ -38,7 +38,7 @@
 
 clear
 clc
-close all force
+% close all force
 diary('off')
 fclose('all') ;
 
@@ -48,8 +48,9 @@ tic
 
 %% Filenames
 
-trackfile = 'OpenTRACK Tracks/OpenTRACK_Spa-Francorchamps_Closed_Forward.mat' ;
+trackfile = 'OpenTRACK_Paul Ricard_Closed_Forward.mat' ;
 vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_Formula 1_Open Wheel.mat' ;
+ggv = load("GGV_Data.mat").dataPoints;
 
 %% Loading circuit
 
@@ -57,7 +58,52 @@ tr = load(trackfile) ;
 
 %% Loading car
 
-veh = load(vehiclefile) ;
+% veh = load(vehiclefile) ;
+% FE12 constants
+% Chasis/suspension constants
+carParams.m = 270;                        % Total Mass [kg]
+carParams.PFront = 53.4/100;              % Percent Mass Front [0-1]
+carParams.WB = 1.582;                     % Wheelbase [m]
+carParams.TWf = 1.240;                    % Trackwidth [m]
+carParams.TWr = 1.240;
+carParams.toe_f = -0.5 * (pi/180);        % Toe Angles [radians] (positive is inwards)
+carParams.toe_r = 0.5 * (pi/180);
+carParams.hCG = 0.314;                    % CG height [m]
+carParams.TireInclinationFront = -1.3; % deg 
+carParams.TireInclinationRear = -1;    % deg   
+
+% Aero constants
+carParams.Cl = 3.215;
+carParams.Cd = 1.468; 
+carParams.CoP = 45/100;                   % front downforce distribution (%)
+carParams.rho = 1.165;                    % kg/m^3
+carParams.crossA = 0.9237;                % m^2
+
+% braking system
+carParams.B_FBB = 55/45;                    % Front brake bias
+
+% Tire
+tire = load('Hoosier_R20_16(18)x75(60)-10x8(7).mat');
+tire.Idx = 1;                     % Moment of Inertia in x for wheel
+tire.TirePressure = 70;           % kPa
+tire.Model = struct( 'Pure', 'Pacejka', 'Combined', 'MNC' );
+carParams.tire = tire;
+veh = carParams;
+veh.name = "FE12";
+
+mask = ggv(3, :) > 0;
+
+x = ggv(1, mask);
+y = ggv(2, mask);
+z = ggv(3, mask);
+
+veh.max_drive = scatteredInterpolant(x', y', z', "linear", "nearest");
+
+x = ggv(1, ~mask);
+y = ggv(2, ~mask);
+z = ggv(3, ~mask);
+
+veh.max_brake = scatteredInterpolant(x', y', z', "linear", "nearest");
 
 %% Export frequency
 
@@ -254,12 +300,22 @@ function [sim] = simulate(veh,tr,simname,logid)
     fprintf(logid,'%s\n','Simulation started.') ;
     
     %% maximum speed curve (assuming pure lateral condition)
+
+    dataPoints = load("GGV_Data.mat").dataPoints;
+    mask = dataPoints(3, :) == 0 & dataPoints(2, :) > 0;
+    
+    v_samples = dataPoints(1, mask);
+    Fy_samples = dataPoints(2, mask) .* 9.81 .* veh.m;
+    
+    %%
+
+    pp_Fy = pchip(v_samples, Fy_samples);
     
     v_max = single(zeros(tr.n,1)) ;
     bps_v_max = single(zeros(tr.n,1)) ;
     tps_v_max = single(zeros(tr.n,1)) ;
     for i=1:tr.n
-        [v_max(i),tps_v_max(i),bps_v_max(i)] = vehicle_model_lat(veh,tr,i) ;
+        [v_max(i),tps_v_max(i),bps_v_max(i)] = vehicle_model_lat(veh,tr.r(i),pp_Fy) ;
     end
     
     % HUD
@@ -461,8 +517,9 @@ function [sim] = simulate(veh,tr,simname,logid)
     disp('Laptime calculated.')
     fprintf(logid,'%s\n','Laptime calculated.') ;
     
+    %%
     % calculating forces
-    M = veh.M ;
+    M = veh.m ;
     g = 9.81 ;
     A = sqrt(AX.^2+AY.^2) ;
     Fz_mass = -M*g*cosd(tr.bank).*cosd(tr.incl) ;
@@ -473,7 +530,7 @@ function [sim] = simulate(veh,tr,simname,logid)
     % HUD
     disp('Forces calculated.')
     fprintf(logid,'%s\n','Forces calculated.') ;
-    
+
     % calculating yaw motion, vehicle slip angle and steering input
     yaw_rate = V.*tr.r ;
     delta = zeros(tr.n,1) ;
@@ -492,7 +549,7 @@ function [sim] = simulate(veh,tr,simname,logid)
     fprintf(logid,'%s\n','Yaw motion calculated.') ;
     fprintf(logid,'%s\n','Steering angles calculated.') ;
     fprintf(logid,'%s\n','Vehicle slip angles calculated.') ;
-    
+
     % calculating engine metrics
     wheel_torque = TPS.*interp1(veh.vehicle_speed,veh.wheel_torque,V,'linear','extrap') ;
     Fx_eng = wheel_torque/veh.tyre_radius ;
@@ -505,7 +562,7 @@ function [sim] = simulate(veh,tr,simname,logid)
     % HUD
     disp('Engine metrics calculated.')
     fprintf(logid,'%s\n','Engine metrics calculated.') ;
-    
+
     % calculating kpis
     percent_in_corners = sum(tr.r~=0)/tr.n*100 ;
     percent_in_accel = sum(TPS>0)/tr.n*100 ;
@@ -563,8 +620,8 @@ function [sim] = simulate(veh,tr,simname,logid)
     sim.elevation.unit = 'm' ;
     sim.speed.data = V ;
     sim.speed.unit = 'm/s' ;
-    sim.yaw_rate.data = yaw_rate ;
-    sim.yaw_rate.unit = 'rad/s' ;
+    % sim.yaw_rate.data = yaw_rate ;
+    % sim.yaw_rate.unit = 'rad/s' ;
     sim.long_acc.data = AX ;
     sim.long_acc.unit = 'm/s/s' ;
     sim.lat_acc.data = AY ;
@@ -656,115 +713,19 @@ function [sim] = simulate(veh,tr,simname,logid)
 end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-function [v,tps,bps] = vehicle_model_lat(veh,tr,p)
-    
-    %% initialisation
-    % getting track data
-    g = 9.81 ;
-    r = tr.r(p) ;
-    incl = tr.incl(p) ;
-    bank = tr.bank(p) ;
-    factor_grip = tr.factor_grip(p)*veh.factor_grip ;
-    % getting vehicle data
-    factor_drive = veh.factor_drive ;
-    factor_aero = veh.factor_aero ;
-    driven_wheels = veh.driven_wheels ;
-    % Mass
-    M = veh.M ;
-    % normal load on all wheels
-    Wz = M*g*cosd(bank)*cosd(incl) ;
-    % induced weight from banking and inclination
-    Wy = -M*g*sind(bank) ;
-    Wx = M*g*sind(incl) ;
-    
-    %% speed solution
-    if r==0 % straight (limited by engine speed limit or drag)
-        % checking for engine speed limit
-        v = veh.v_max ;
-        tps = 1 ; % full throttle
-        bps = 0 ; % 0 brake
-    else % corner (may be limited by engine, drag or cornering ability)
-        %% initial speed solution
-        % downforce coefficient
-        D = -1/2*veh.rho*veh.factor_Cl*veh.Cl*veh.A ;
-        % longitudinal tyre coefficients
-        dmy = factor_grip*veh.sens_y ;
-        muy = factor_grip*veh.mu_y ;
-        Ny = veh.mu_y_M*g ;
-        % longitudinal tyre coefficients
-        dmx = factor_grip*veh.sens_x ;
-        mux = factor_grip*veh.mu_x ;
-        Nx = veh.mu_x_M*g ;
-        % 2nd degree polynomial coefficients ( a*x^2+b*x+c = 0 )
-        a = -sign(r)*dmy/4*D^2 ;
-        b = sign(r)*(muy*D+(dmy/4)*(Ny*4)*D-2*(dmy/4)*Wz*D)-M*r ;
-        c = sign(r)*(muy*Wz+(dmy/4)*(Ny*4)*Wz-(dmy/4)*Wz^2)+Wy ;
-        % calculating 2nd degree polynomial roots
-        if a==0
-            v = sqrt(-c/b) ;
-        elseif b^2-4*a*c>=0
-            if (-b+sqrt(b^2-4*a*c))/2/a>=0
-                v = sqrt((-b+sqrt(b^2-4*a*c))/2/a) ;
-            elseif (-b-sqrt(b^2-4*a*c))/2/a>=0
-                v = sqrt((-b-sqrt(b^2-4*a*c))/2/a) ;
-            else
-                error(['No real roots at point index: ',num2str(p)])
-            end
-        else
-            error(['Discriminant <0 at point index: ',num2str(p)])
-        end
-        % checking for engine speed limit
-        v = min([v,veh.v_max]) ;
-        %% adjusting speed for drag force compensation
-        adjust_speed = true ;
-        while adjust_speed
-            % aero forces
-            Aero_Df = 1/2*veh.rho*veh.factor_Cl*veh.Cl*veh.A*v^2 ;
-            Aero_Dr = 1/2*veh.rho*veh.factor_Cd*veh.Cd*veh.A*v^2 ;
-            % rolling resistance
-            Roll_Dr = veh.Cr*(-Aero_Df+Wz) ;
-            % normal load on driven wheels
-            Wd = (factor_drive*Wz+(-factor_aero*Aero_Df))/driven_wheels ;
-            % drag acceleration
-            ax_drag = (Aero_Dr+Roll_Dr+Wx)/M ;
-            % maximum lat acc available from tyres
-            ay_max = sign(r)/M*(muy+dmy*(Ny-(Wz-Aero_Df)/4))*(Wz-Aero_Df) ;
-            % needed lat acc make turn
-            ay_needed = v^2*r+g*sind(bank) ; % circular motion and track banking
-            % calculating driver inputs
-            if ax_drag<=0 % need throttle to compensate for drag
-                % max long acc available from tyres
-                ax_tyre_max_acc = 1/M*(mux+dmx*(Nx-Wd))*Wd*driven_wheels ;
-                % getting power limit from engine
-                ax_power_limit = 1/M*(interp1(veh.vehicle_speed,veh.factor_power*veh.fx_engine,v)) ;
-                % available combined lat acc at ax_net==0 => ax_tyre==-ax_drag
-                ay = ay_max*sqrt(1-(ax_drag/ax_tyre_max_acc)^2) ; % friction ellipse
-                % available combined long acc at ay_needed
-                ax_acc = ax_tyre_max_acc*sqrt(1-(ay_needed/ay_max)^2) ; % friction ellipse
-                % getting tps value
-                scale = min([-ax_drag,ax_acc])/ax_power_limit ;
-                tps = max([min([1,scale]),0]) ; % making sure its positive
-                bps = 0 ; % setting brake pressure to 0
-            else % need brake to compensate for drag
-                % max long acc available from tyres
-                ax_tyre_max_dec = -1/M*(mux+dmx*(Nx-(Wz-Aero_Df)/4))*(Wz-Aero_Df) ;
-                % available combined lat acc at ax_net==0 => ax_tyre==-ax_drag
-                ay = ay_max*sqrt(1-(ax_drag/ax_tyre_max_dec)^2) ; % friction ellipse
-                % available combined long acc at ay_needed
-                ax_dec = ax_tyre_max_dec*sqrt(1-(ay_needed/ay_max)^2) ; % friction ellipse
-                % getting brake input
-                fx_tyre = max([ax_drag,-ax_dec])*M ;
-                bps = max([fx_tyre,0])*veh.beta ; % making sure its positive
-                tps = 0 ; % setting throttle to 0
-            end
-            % checking if tyres can produce the available combined lat acc
-            if ay/ay_needed<1 % not enough grip
-                v = sqrt((ay-g*sind(bank))/r)-1E-3 ; % the (-1E-3 factor is there for convergence speed)
-            else % enough grip
-                adjust_speed = false ;
-            end
-        end
-    end
+function [v,tps,bps] = vehicle_model_lat(veh,r,pp_Fy)
+     % speed solution
+     if false%abs(r) < 1e-6 % At strait
+         v = inf;
+     else % Cornering
+         r = abs(r);
+         f = @(v) (v < 5)*1e6 + ppval(pp_Fy, v) - veh.m*r*v.^2;
+         disp("r=" + r)
+         opts = optimset('Display', 'iter', 'FunValCheck', 'on');
+         v = fzero(f, 50);
+     tps = 0;
+     bps = 0;
+end
     
 end
 
@@ -780,18 +741,7 @@ function [v_next,ax,ay,tps,bps,overshoot] = vehicle_model_comb(veh,tr,v,v_max_ne
     r = tr.r(j) ;
     incl = tr.incl(j) ;
     bank = tr.bank(j) ;
-    factor_grip = tr.factor_grip(j)*veh.factor_grip ;
     g = 9.81 ;
-    % getting vehicle data
-    if mode==1
-        factor_drive = veh.factor_drive ;
-        factor_aero = veh.factor_aero ;
-        driven_wheels = veh.driven_wheels ;
-    else
-        factor_drive = 1 ;
-        factor_aero = 1 ;
-        driven_wheels = 4 ;
-    end
     
     %% current lat acc
     
@@ -804,8 +754,16 @@ function [v_next,ax,ay,tps,bps,overshoot] = vehicle_model_comb(veh,tr,v,v_max_ne
 
     %% find ax
 
-    ax = interpulateGGV(veh.GGV, v, ay);
+    % ax = interpulateGGV(veh.GGV, v, ay);
+    % [ax, ~, ~] = vehicle_model_comb_test(veh, v, ay, mode==1, [0 0 0]);
+    if mode == 1
+        ax = veh.max_drive(double(v), double(ay/g))*g;
+        ax = min(ax_max, ax);
 
+    else
+        ax = veh.max_brake(double(v), double(ay/g))*g;
+        ax = max(ax_max, ax);
+    end
 
     %% final results
     
@@ -815,9 +773,9 @@ function [v_next,ax,ay,tps,bps,overshoot] = vehicle_model_comb(veh,tr,v,v_max_ne
     % next speed value
     v_next = sqrt(v^2+2*mode*ax*tr.dx(j)) ;
     % correcting tps for full throttle when at v_max on straights
-    if tps>0 && v/veh.v_max>=0.999
-        tps = 1 ;
-    end
+    % if tps>0 && v/veh.v_max>=0.999
+    %     tps = 1 ;
+    % end
     
     %% checking for overshoot
     
