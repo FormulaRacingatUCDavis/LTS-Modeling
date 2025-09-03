@@ -48,13 +48,20 @@ tic
 
 %% Filenames
 
-trackfile = 'OpenTRACK_Paul Ricard_Closed_Forward.mat' ;
+trackfile = 'gtgt.mat' ;
 vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_Formula 1_Open Wheel.mat' ;
 ggv = load("GGV_Data.mat").dataPoints;
 
 %% Loading circuit
 
 tr = load(trackfile) ;
+tr = tr.TrackInfo;
+tr.info.name = "blue max";
+tr.info.config = "Closed";
+tr.r = 1 ./ tr.r;
+tr.dx = [tr.dx; 0.5];
+tr.bank = zeros(size(tr.r));
+tr.incl = zeros(size(tr.r));
 
 %% Loading car
 
@@ -508,10 +515,10 @@ function [sim] = simulate(veh,tr,simname,logid)
     else
         time = cumsum(tr.dx./V) ;
     end
-    sector_time = zeros(max(tr.sector),1) ;
-    for i=1:max(tr.sector)
-        sector_time(i) = max(time(tr.sector==i))-min(time(tr.sector==i)) ;
-    end
+    % sector_time = zeros(max(tr.sector),1) ;
+    % for i=1:max(tr.sector)
+    %     sector_time(i) = max(time(tr.sector==i))-min(time(tr.sector==i)) ;
+    % end
     laptime = time(end) ;
     % HUD
     disp('Laptime calculated.')
