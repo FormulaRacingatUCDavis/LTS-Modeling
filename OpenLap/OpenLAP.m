@@ -49,6 +49,7 @@ tic
 %% Filenames
 
 trackfile = 'gtgt.mat' ;
+% trackfile = 'OpenTRACK_Paul Ricard_Closed_Forward.mat' ;
 vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_Formula 1_Open Wheel.mat' ;
 ggv = load("GGV_Data.mat").dataPoints;
 
@@ -62,6 +63,9 @@ tr.r = 1 ./ tr.r;
 tr.dx = [tr.dx; 0.5];
 tr.bank = zeros(size(tr.r));
 tr.incl = zeros(size(tr.r));
+tr.Z = zeros(size(tr.r));
+tr.X = tr.coords(:, 1);
+tr.Y = tr.coords(:, 2);
 
 %% Loading car
 
@@ -156,14 +160,14 @@ disp(['Laptime:  ',num2str(sim.laptime.data,'%3.3f'),' [s]'])
 fprintf(logid,'%s','Laptime   : ') ;
 fprintf(logid,'%7.3f',sim.laptime.data) ;
 fprintf(logid,'%s\n',' [s]') ;
-for i=1:max(tr.sector)
-    disp(['Sector ',num2str(i),': ',num2str(sim.sector_time.data(i),'%3.3f'),' [s]'])
-    fprintf(logid,'%s','Sector ') ;
-    fprintf(logid,'%3d',i) ;
-    fprintf(logid,'%s',': ') ;
-    fprintf(logid,'%7.3f',sim.sector_time.data(i)) ;
-    fprintf(logid,'%s\n',' [s]') ;
-end
+% for i=1:max(tr.sector)
+%     disp(['Sector ',num2str(i),': ',num2str(sim.sector_time.data(i),'%3.3f'),' [s]'])
+%     fprintf(logid,'%s','Sector ') ;
+%     fprintf(logid,'%3d',i) ;
+%     fprintf(logid,'%s',': ') ;
+%     fprintf(logid,'%7.3f',sim.sector_time.data(i)) ;
+%     fprintf(logid,'%s\n',' [s]') ;
+% end
 
 %% Ploting results
 
@@ -224,34 +228,34 @@ ylabel('Acceleration [m/s^2]')
 grid on
 
 % drive inputs
-subplot(rows,cols,[7,8])
-hold on
-plot(tr.x,sim.throttle.data*100)
-plot(tr.x,sim.brake_pres.data/10^5)
-legend({'tps','bps'},'Location',loc)
-xlabel('Distance [m]')
-xlim(xlimit)
-ylabel('input [%]')
-grid on
-ylim([-10,110])
-
-% steering inputs
-subplot(rows,cols,[9,10])
-hold on
-plot(tr.x,sim.steering.data)
-plot(tr.x,sim.delta.data)
-plot(tr.x,sim.beta.data)
-legend({'Steering wheel','Steering \delta','Vehicle slip angle \beta'},'Location',loc)
-xlabel('Distance [m]')
-xlim(xlimit)
-ylabel('angle [deg]')
-grid on
+% subplot(rows,cols,[7,8])
+% hold on
+% plot(tr.x,sim.throttle.data*100)
+% plot(tr.x,sim.brake_pres.data/10^5)
+% legend({'tps','bps'},'Location',loc)
+% xlabel('Distance [m]')
+% xlim(xlimit)
+% ylabel('input [%]')
+% grid on
+% ylim([-10,110])
+% 
+% % steering inputs
+% subplot(rows,cols,[9,10])
+% hold on
+% plot(tr.x,sim.steering.data)
+% plot(tr.x,sim.delta.data)
+% plot(tr.x,sim.beta.data)
+% legend({'Steering wheel','Steering \delta','Vehicle slip angle \beta'},'Location',loc)
+% xlabel('Distance [m]')
+% xlim(xlimit)
+% ylabel('angle [deg]')
+% grid on
 
 % ggv circle
 subplot(rows,cols,[11,13])
 hold on
 scatter3(sim.lat_acc.data,sim.long_acc.data,sim.speed.data*3.6,50,'ro','filled','MarkerEdgeColor',[0,0,0])
-surf(veh.GGV(:,:,2),veh.GGV(:,:,1),veh.GGV(:,:,3)*3.6,'EdgeAlpha',0.3,'FaceAlpha',0.8)
+% surf(veh.GGV(:,:,2),veh.GGV(:,:,1),veh.GGV(:,:,3)*3.6,'EdgeAlpha',0.3,'FaceAlpha',0.8)
 legend('OpenLAP','GGV','Location','northeast')
 xlabel('LatAcc [m/s^2]')
 ylabel('LonAcc [m/s^2]')
@@ -264,10 +268,12 @@ axis tight
 subplot(rows,cols,[12,14])
 hold on
 scatter(tr.X,tr.Y,5,sim.speed.data*3.6)
-plot(tr.arrow(:,1),tr.arrow(:,2),'k','LineWidth',2)
+% plot(tr.arrow(:,1),tr.arrow(:,2),'k','LineWidth',2)
 legend('Track Map','Location','northeast')
 xlabel('X [m]')
 ylabel('Y [m]')
+xlim([0, 700])
+ylim([0, 700])
 colorbar
 grid on
 axis equal
@@ -530,74 +536,74 @@ function [sim] = simulate(veh,tr,simname,logid)
     g = 9.81 ;
     A = sqrt(AX.^2+AY.^2) ;
     Fz_mass = -M*g*cosd(tr.bank).*cosd(tr.incl) ;
-    Fz_aero = 1/2*veh.rho*veh.factor_Cl*veh.Cl*veh.A*V.^2 ;
+    Fz_aero = 1/2*veh.rho*veh.Cl*veh.crossA*V.^2 ;
     Fz_total = Fz_mass+Fz_aero ;
-    Fx_aero = 1/2*veh.rho*veh.factor_Cd*veh.Cd*veh.A*V.^2 ;
-    Fx_roll = veh.Cr*abs(Fz_total) ;
-    % HUD
-    disp('Forces calculated.')
-    fprintf(logid,'%s\n','Forces calculated.') ;
+    Fx_aero = 1/2*veh.rho*veh.Cd*veh.crossA*V.^2 ;
+    % Fx_roll = veh.Cr*abs(Fz_total) ;
+    % % HUD
+    % disp('Forces calculated.')
+    % fprintf(logid,'%s\n','Forces calculated.') ;
 
     % calculating yaw motion, vehicle slip angle and steering input
-    yaw_rate = V.*tr.r ;
-    delta = zeros(tr.n,1) ;
-    beta = zeros(tr.n,1) ;
-    for i=1:tr.n
-        B = [M*V(i)^2*tr.r(i)+M*g*sind(tr.bank(i));0] ;
-        sol = veh.C\B ;
-        delta(i) = sol(1)+atand(veh.L*tr.r(i)) ;
-        beta(i) = sol(2) ;
-    end
-    steer = delta*veh.rack ;
-    % HUD
-    disp('Yaw motion calculated.')
-    disp('Steering angles calculated.')
-    disp('Vehicle slip angles calculated.')
-    fprintf(logid,'%s\n','Yaw motion calculated.') ;
-    fprintf(logid,'%s\n','Steering angles calculated.') ;
-    fprintf(logid,'%s\n','Vehicle slip angles calculated.') ;
+    % yaw_rate = V.*tr.r ;
+    % delta = zeros(tr.n,1) ;
+    % beta = zeros(tr.n,1) ;
+    % for i=1:tr.n
+    %     B = [M*V(i)^2*tr.r(i)+M*g*sind(tr.bank(i));0] ;
+    %     sol = veh.C\B ;
+    %     delta(i) = sol(1)+atand(veh.L*tr.r(i)) ;
+    %     beta(i) = sol(2) ;
+    % end
+    % steer = delta*veh.rack ;
+    % % HUD
+    % disp('Yaw motion calculated.')
+    % disp('Steering angles calculated.')
+    % disp('Vehicle slip angles calculated.')
+    % fprintf(logid,'%s\n','Yaw motion calculated.') ;
+    % fprintf(logid,'%s\n','Steering angles calculated.') ;
+    % fprintf(logid,'%s\n','Vehicle slip angles calculated.') ;
 
     % calculating engine metrics
-    wheel_torque = TPS.*interp1(veh.vehicle_speed,veh.wheel_torque,V,'linear','extrap') ;
-    Fx_eng = wheel_torque/veh.tyre_radius ;
-    engine_torque = TPS.*interp1(veh.vehicle_speed,veh.engine_torque,V,'linear','extrap') ;
-    engine_power = TPS.*interp1(veh.vehicle_speed,veh.engine_power,V,'linear','extrap') ;
-    engine_speed = interp1(veh.vehicle_speed,veh.engine_speed,V,'linear','extrap') ;
-    gear = interp1(veh.vehicle_speed,veh.gear,V,'nearest','extrap') ;
-    fuel_cons = cumsum(wheel_torque/veh.tyre_radius.*tr.dx/veh.n_primary/veh.n_gearbox/veh.n_final/veh.n_thermal/veh.fuel_LHV) ;
-    fuel_cons_total = fuel_cons(end) ;
-    % HUD
-    disp('Engine metrics calculated.')
-    fprintf(logid,'%s\n','Engine metrics calculated.') ;
+    % wheel_torque = TPS.*interp1(veh.vehicle_speed,veh.wheel_torque,V,'linear','extrap') ;
+    % Fx_eng = wheel_torque/veh.tyre_radius ;
+    % engine_torque = TPS.*interp1(veh.vehicle_speed,veh.engine_torque,V,'linear','extrap') ;
+    % engine_power = TPS.*interp1(veh.vehicle_speed,veh.engine_power,V,'linear','extrap') ;
+    % engine_speed = interp1(veh.vehicle_speed,veh.engine_speed,V,'linear','extrap') ;
+    % gear = interp1(veh.vehicle_speed,veh.gear,V,'nearest','extrap') ;
+    % fuel_cons = cumsum(wheel_torque/veh.tyre_radius.*tr.dx/veh.n_primary/veh.n_gearbox/veh.n_final/veh.n_thermal/veh.fuel_LHV) ;
+    % fuel_cons_total = fuel_cons(end) ;
+    % % HUD
+    % disp('Engine metrics calculated.')
+    % fprintf(logid,'%s\n','Engine metrics calculated.') ;
 
     % calculating kpis
-    percent_in_corners = sum(tr.r~=0)/tr.n*100 ;
-    percent_in_accel = sum(TPS>0)/tr.n*100 ;
-    percent_in_decel = sum(BPS>0)/tr.n*100 ;
-    percent_in_coast = sum(and(BPS==0,TPS==0))/tr.n*100 ;
-    percent_in_full_tps = sum(tps==1)/tr.n*100 ;
-    percent_in_gear = zeros(veh.nog,1) ;
-    for i=1:veh.nog
-        percent_in_gear(i) = sum(gear==i)/tr.n*100 ;
-    end
-    energy_spent_fuel = fuel_cons*veh.fuel_LHV ;
-    energy_spent_mech = energy_spent_fuel*veh.n_thermal ;
-    gear_shifts = sum(abs(diff(gear))) ;
+    % percent_in_corners = sum(tr.r~=0)/tr.n*100 ;
+    % percent_in_accel = sum(TPS>0)/tr.n*100 ;
+    % percent_in_decel = sum(BPS>0)/tr.n*100 ;
+    % percent_in_coast = sum(and(BPS==0,TPS==0))/tr.n*100 ;
+    % percent_in_full_tps = sum(tps==1)/tr.n*100 ;
+    % percent_in_gear = zeros(veh.nog,1) ;
+    % for i=1:veh.nog
+    %     percent_in_gear(i) = sum(gear==i)/tr.n*100 ;
+    % end
+    % energy_spent_fuel = fuel_cons*veh.fuel_LHV ;
+    % energy_spent_mech = energy_spent_fuel*veh.n_thermal ;
+    % gear_shifts = sum(abs(diff(gear))) ;
     [~,i] = max(abs(AY)) ;
     ay_max = AY(i) ;
     ax_max = max(AX) ;
     ax_min = min(AX) ;
-    sector_v_max = zeros(max(tr.sector),1) ;
-    sector_v_min = zeros(max(tr.sector),1) ;
-    for i=1:max(tr.sector)
-        sector_v_max(i) = max(V(tr.sector==i)) ;
-        sector_v_min(i) = min(V(tr.sector==i)) ;
-    end
-    % HUD
-    disp('KPIs calculated.')
-    disp('Post-processing finished.')
-    fprintf(logid,'%s\n','KPIs calculated.') ;
-    fprintf(logid,'%s\n','Post-processing finished.') ;
+    % sector_v_max = zeros(max(tr.sector),1) ;
+    % sector_v_min = zeros(max(tr.sector),1) ;
+    % for i=1:max(tr.sector)
+    %     sector_v_max(i) = max(V(tr.sector==i)) ;
+    %     sector_v_min(i) = min(V(tr.sector==i)) ;
+    % end
+    % % HUD
+    % disp('KPIs calculated.')
+    % disp('Post-processing finished.')
+    % fprintf(logid,'%s\n','KPIs calculated.') ;
+    % fprintf(logid,'%s\n','Post-processing finished.') ;
     
     %% saving results in sim structure
     sim.sim_name.data = simname ;
@@ -635,82 +641,82 @@ function [sim] = simulate(veh,tr,simname,logid)
     sim.lat_acc.unit = 'm/s/s' ;
     sim.sum_acc.data = A ;
     sim.sum_acc.unit = 'm/s/s' ;
-    sim.throttle.data = TPS ;
-    sim.throttle.unit = 'ratio' ;
-    sim.brake_pres.data = BPS ;
-    sim.brake_pres.unit = 'Pa' ;
-    sim.brake_force.data = BPS*veh.phi ;
-    sim.brake_force.unit = 'N' ;
-    sim.steering.data = steer ;
-    sim.steering.unit = 'deg' ;
+    % sim.throttle.data = TPS ;
+    % sim.throttle.unit = 'ratio' ;
+    % sim.brake_pres.data = BPS ;
+    % sim.brake_pres.unit = 'Pa' ;
+    % sim.brake_force.data = BPS*veh.phi ;
+    % sim.brake_force.unit = 'N' ;
+    % sim.steering.data = steer ;
+    % sim.steering.unit = 'deg' ;
     sim.delta.data = delta ;
     sim.delta.unit = 'deg' ;
-    sim.beta.data = beta ;
-    sim.beta.unit = 'deg' ;
+    % sim.beta.data = beta ;
+    % sim.beta.unit = 'deg' ;
     sim.Fz_aero.data = Fz_aero ;
     sim.Fz_aero.unit = 'N' ;
     sim.Fx_aero.data = Fx_aero ;
     sim.Fx_aero.unit = 'N' ;
-    sim.Fx_eng.data = Fx_eng ;
-    sim.Fx_eng.unit = 'N' ;
-    sim.Fx_roll.data = Fx_roll ;
-    sim.Fx_roll.unit = 'N' ;
+    % sim.Fx_eng.data = Fx_eng ;
+    % sim.Fx_eng.unit = 'N' ;
+    % sim.Fx_roll.data = Fx_roll ;
+    % sim.Fx_roll.unit = 'N' ;
     sim.Fz_mass.data = Fz_mass ;
     sim.Fz_mass.unit = 'N' ;
-    sim.Fz_total.data = Fz_total ;
-    sim.Fz_total.unit = 'N' ;
-    sim.wheel_torque.data = wheel_torque ;
-    sim.wheel_torque.unit = 'N.m' ;
-    sim.engine_torque.data = engine_torque ;
-    sim.engine_torque.unit = 'N.m' ;
-    sim.engine_power.data = engine_power ;
-    sim.engine_power.unit = 'W' ;
-    sim.engine_speed.data = engine_speed ;
-    sim.engine_speed.unit = 'rpm' ;
-    sim.gear.data = gear ;
-    sim.gear.unit = [] ;
-    sim.fuel_cons.data = fuel_cons ;
-    sim.fuel_cons.unit = 'kg' ;
-    sim.fuel_cons_total.data = fuel_cons_total ;
-    sim.fuel_cons_total.unit = 'kg' ;
+    % sim.Fz_total.data = Fz_total ;
+    % sim.Fz_total.unit = 'N' ;
+    % sim.wheel_torque.data = wheel_torque ;
+    % sim.wheel_torque.unit = 'N.m' ;
+    % sim.engine_torque.data = engine_torque ;
+    % sim.engine_torque.unit = 'N.m' ;
+    % sim.engine_power.data = engine_power ;
+    % sim.engine_power.unit = 'W' ;
+    % sim.engine_speed.data = engine_speed ;
+    % sim.engine_speed.unit = 'rpm' ;
+    % sim.gear.data = gear ;
+    % sim.gear.unit = [] ;
+    % sim.fuel_cons.data = fuel_cons ;
+    % sim.fuel_cons.unit = 'kg' ;
+    % sim.fuel_cons_total.data = fuel_cons_total ;
+    % sim.fuel_cons_total.unit = 'kg' ;
     sim.laptime.data = laptime ;
     sim.laptime.unit = 's' ;
-    sim.sector_time.data = sector_time ;
-    sim.sector_time.unit = 's' ;
-    sim.percent_in_corners.data = percent_in_corners ;
-    sim.percent_in_corners.unit = '%' ;
-    sim.percent_in_accel.data = percent_in_accel ;
-    sim.percent_in_accel.unit = '%' ;
-    sim.percent_in_decel.data = percent_in_decel ;
-    sim.percent_in_decel.unit = '%' ;
-    sim.percent_in_coast.data = percent_in_coast ;
-    sim.percent_in_coast.unit = '%' ;
-    sim.percent_in_full_tps.data = percent_in_full_tps ;
-    sim.percent_in_full_tps.unit = '%' ;
-    sim.percent_in_gear.data = percent_in_gear ;
-    sim.percent_in_gear.unit = '%' ;
+    % sim.sector_time.data = sector_time ;
+    % sim.sector_time.unit = 's' ;
+    % sim.percent_in_corners.data = percent_in_corners ;
+    % sim.percent_in_corners.unit = '%' ;
+    % sim.percent_in_accel.data = percent_in_accel ;
+    % sim.percent_in_accel.unit = '%' ;
+    % sim.percent_in_decel.data = percent_in_decel ;
+    % sim.percent_in_decel.unit = '%' ;
+    % sim.percent_in_coast.data = percent_in_coast ;
+    % sim.percent_in_coast.unit = '%' ;
+    % sim.percent_in_full_tps.data = percent_in_full_tps ;
+    % sim.percent_in_full_tps.unit = '%' ;
+    % sim.percent_in_gear.data = percent_in_gear ;
+    % sim.percent_in_gear.unit = '%' ;
     sim.v_min.data = min(V) ;
     sim.v_min.unit = 'm/s' ;
     sim.v_max.data = max(V) ;
     sim.v_max.unit = 'm/s' ;
     sim.v_ave.data = mean(V) ;
     sim.v_ave.unit = 'm/s' ;
-    sim.energy_spent_fuel.data = energy_spent_fuel ;
-    sim.energy_spent_fuel.unit = 'J' ;
-    sim.energy_spent_mech.data = energy_spent_mech ;
-    sim.energy_spent_mech.unit = 'J' ;
-    sim.gear_shifts.data = gear_shifts ;
-    sim.gear_shifts.unit = [] ;
+    % sim.energy_spent_fuel.data = energy_spent_fuel ;
+    % sim.energy_spent_fuel.unit = 'J' ;
+    % sim.energy_spent_mech.data = energy_spent_mech ;
+    % sim.energy_spent_mech.unit = 'J' ;
+    % sim.gear_shifts.data = gear_shifts ;
+    % sim.gear_shifts.unit = [] ;
     sim.lat_acc_max.data = ay_max ;
     sim.lat_acc_max.unit = 'm/s/s' ;
     sim.long_acc_max.data = ax_max ;
     sim.long_acc_max.unit = 'm/s/s' ;
     sim.long_acc_min.data = ax_min ;
     sim.long_acc_min.unit = 'm/s/s' ;
-    sim.sector_v_max.data = sector_v_max ;
-    sim.sector_v_max.unit = 'm/s' ;
-    sim.sector_v_min.data = sector_v_min ;
-    sim.sector_v_min.unit = 'm/s' ;
+    % sim.sector_v_max.data = sector_v_max ;
+    % sim.sector_v_max.unit = 'm/s' ;
+    % sim.sector_v_min.data = sector_v_min ;
+    % sim.sector_v_min.unit = 'm/s' ;
     % HUD
     disp('Simulation results saved.')
     disp('Simulation completed.')
