@@ -48,10 +48,11 @@ tic
 
 %% Filenames
 
-trackfile = 'gtgt.mat' ;
+trackfile = '5.mat' ;
+% trackfile = 'OpenTRACK_FSAE Skidpad_Closed_Forward.mat' ;
 % trackfile = 'OpenTRACK_Paul Ricard_Closed_Forward.mat' ;
 vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_Formula 1_Open Wheel.mat' ;
-ggv = load("GGV_Data.mat").dataPoints;
+ggv = load("GGV_Data2.mat").dataPoints;
 
 %% Loading circuit
 
@@ -60,7 +61,8 @@ tr = tr.TrackInfo;
 tr.info.name = "blue max";
 tr.info.config = "Closed";
 tr.r = 1 ./ tr.r;
-tr.dx = [tr.dx; 0.5];
+tr.dx = [tr.dx; 0.5] .* 0.3048;
+tr.x = tr.x .* 0.3048;
 tr.bank = zeros(size(tr.r));
 tr.incl = zeros(size(tr.r));
 tr.Z = zeros(size(tr.r));
@@ -102,7 +104,11 @@ carParams.tire = tire;
 veh = carParams;
 veh.name = "FE12";
 
-mask = ggv(3, :) > 0;
+veh.ggv = ggv;
+v_max = max(ggv(1, :));
+ggv = [ggv [ones(1, 10)*(v_max+0.1); linspace(-2, 2, 10); zeros(1, 10)]];
+
+mask = ggv(3, :) >= 0;
 
 x = ggv(1, mask);
 y = ggv(2, mask);
@@ -272,8 +278,6 @@ scatter(tr.X,tr.Y,5,sim.speed.data*3.6)
 legend('Track Map','Location','northeast')
 xlabel('X [m]')
 ylabel('Y [m]')
-xlim([0, 700])
-ylim([0, 700])
 colorbar
 grid on
 axis equal
@@ -728,19 +732,19 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [v,tps,bps] = vehicle_model_lat(veh,r,pp_Fy)
      % speed solution
-     if false%abs(r) < 1e-6 % At strait
-         v = inf;
+     if abs(r) < 1e-3 % At strait
+         v = max(veh.ggv(1, :));
      else % Cornering
          r = abs(r);
          f = @(v) (v < 5)*1e6 + ppval(pp_Fy, v) - veh.m*r*v.^2;
          disp("r=" + r)
-         opts = optimset('Display', 'iter', 'FunValCheck', 'on');
+         % opts = optimset('Display', 'iter', 'FunValCheck', 'on');
          v = fzero(f, 50);
+     end
      tps = 0;
      bps = 0;
 end
-    
-end
+   
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function [v_next,ax,ay,tps,bps,overshoot] = vehicle_model_comb(veh,tr,v,v_max_next,j,mode)
