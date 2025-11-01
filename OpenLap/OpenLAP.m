@@ -48,7 +48,8 @@ tic
 
 %% Filenames
 
-trackfile = '5.mat' ;
+% trackfile = 'OpenTRACK_FSAE Skidpad_Closed_Forward.mat' ;
+trackfile = 'gtgt' ;
 % trackfile = 'OpenTRACK_FSAE Skidpad_Closed_Forward.mat' ;
 % trackfile = 'OpenTRACK_Paul Ricard_Closed_Forward.mat' ;
 vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_Formula 1_Open Wheel.mat' ;
@@ -736,8 +737,8 @@ function [v,tps,bps] = vehicle_model_lat(veh,r,pp_Fy)
          v = max(veh.ggv(1, :));
      else % Cornering
          r = abs(r);
-         f = @(v) (v < 5)*1e6 + ppval(pp_Fy, v) - veh.m*r*v.^2;
-         disp("r=" + r)
+         f = @(v) (v < 0)*1e6 + ppval(pp_Fy, v) - veh.m*r*v.^2;
+         % disp("r=" + r)
          % opts = optimset('Display', 'iter', 'FunValCheck', 'on');
          v = fzero(f, 50);
      end
@@ -771,8 +772,6 @@ function [v_next,ax,ay,tps,bps,overshoot] = vehicle_model_comb(veh,tr,v,v_max_ne
 
     %% find ax
 
-    % ax = interpulateGGV(veh.GGV, v, ay);
-    % [ax, ~, ~] = vehicle_model_comb_test(veh, v, ay, mode==1, [0 0 0]);
     if mode == 1
         ax = veh.max_drive(double(v), double(ay/g))*g;
         ax = min(ax_max, ax);
@@ -796,17 +795,17 @@ function [v_next,ax,ay,tps,bps,overshoot] = vehicle_model_comb(veh,tr,v,v_max_ne
     
     %% checking for overshoot
     
-    if v_next/v_max_next>1
-        % setting overshoot flag
-        overshoot = true ;
-        % resetting values for overshoot
-        v_next = inf ;
-        ax = 0 ;
-        ay = 0 ;
-        tps = -1 ;
-        bps = -1 ;
-        return
-    end
+    % if v_next/v_max_next>1
+    %     % setting overshoot flag
+    %     overshoot = true ;
+    %     % resetting values for overshoot
+    %     v_next = inf ;
+    %     ax = 0 ;
+    %     ay = 0 ;
+    %     tps = -1 ;
+    %     bps = -1 ;
+    %     return
+    % end
     
 end
 
