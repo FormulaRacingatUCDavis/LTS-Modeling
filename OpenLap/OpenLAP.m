@@ -48,8 +48,17 @@ tic
 
 %% Filenames
 
+<<<<<<< Updated upstream
 trackfile = 'OpenTRACK Tracks/OpenTRACK_Spa-Francorchamps_Closed_Forward.mat' ;
 vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_Formula 1_Open Wheel.mat' ;
+=======
+% trackfile = 'OpenTRACK_FSAE Skidpad_Closed_Forward.mat' ;
+trackfile = 'bluemax' ;
+% trackfile = 'OpenTRACK_FSAE Skidpad_Closed_Forward.mat' ;
+% trackfile = 'OpenTRACK_Paul Ricard_Closed_Forward.mat' ;
+% vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_Formula 1_Open Wheel.mat' ;
+ggv = load("GGV_Data2.mat").dataPoints;
+>>>>>>> Stashed changes
 
 %% Loading circuit
 
