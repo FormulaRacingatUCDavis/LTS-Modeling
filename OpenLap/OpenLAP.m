@@ -49,11 +49,10 @@ tic
 %% Filenames
 
 % trackfile = 'OpenTRACK_FSAE Skidpad_Closed_Forward.mat' ;
-trackfile = 'gtgt' ;
+trackfile = 'bluemax' ;
 % trackfile = 'OpenTRACK_FSAE Skidpad_Closed_Forward.mat' ;
 % trackfile = 'OpenTRACK_Paul Ricard_Closed_Forward.mat' ;
-vehiclefile = 'OpenVEHICLE Vehicles/OpenVEHICLE_Formula 1_Open Wheel.mat' ;
-ggv = load("GGV_Data2.mat").dataPoints;
+vehiclefile = 'FE12_max_aero' ;
 
 %% Loading circuit
 
@@ -72,56 +71,27 @@ tr.Y = tr.coords(:, 2);
 
 %% Loading car
 
-% veh = load(vehiclefile) ;
-% FE12 constants
-% Chasis/suspension constants
-carParams.m = 270;                        % Total Mass [kg]
-carParams.PFront = 53.4/100;              % Percent Mass Front [0-1]
-carParams.WB = 1.582;                     % Wheelbase [m]
-carParams.TWf = 1.240;                    % Trackwidth [m]
-carParams.TWr = 1.240;
-carParams.toe_f = -0.5 * (pi/180);        % Toe Angles [radians] (positive is inwards)
-carParams.toe_r = 0.5 * (pi/180);
-carParams.hCG = 0.314;                    % CG height [m]
-carParams.TireInclinationFront = -1.3; % deg 
-carParams.TireInclinationRear = -1;    % deg   
-
-% Aero constants
-carParams.Cl = 3.215;
-carParams.Cd = 1.468; 
-carParams.CoP = 45/100;                   % front downforce distribution (%)
-carParams.rho = 1.165;                    % kg/m^3
-carParams.crossA = 0.9237;                % m^2
-
-% braking system
-carParams.B_FBB = 55/45;                    % Front brake bias
-
-% Tire
-tire = load('Hoosier_R20_16(18)x75(60)-10x8(7).mat');
-tire.Idx = 1;                     % Moment of Inertia in x for wheel
-tire.TirePressure = 70;           % kPa
-tire.Model = struct( 'Pure', 'Pacejka', 'Combined', 'MNC' );
-carParams.tire = tire;
-veh = carParams;
+veh = load(vehiclefile).carParams;
+ggv = load(vehiclefile).GGV_data;
+veh.ggv = ggv;
 veh.name = "FE12";
 
-veh.ggv = ggv;
-v_max = max(ggv(1, :));
-ggv = [ggv [ones(1, 10)*(v_max+0.1); linspace(-2, 2, 10); zeros(1, 10)]];
+v_max = max(ggv(:, 3));
+ggv = [ggv; [zeros(10, 1), linspace(-2, 2, 10)', ones(10, 1)*(v_max+0.1)]];
 
-mask = ggv(3, :) >= 0;
+mask = ggv(:, 1) >= 0;
 
-x = ggv(1, mask);
-y = ggv(2, mask);
-z = ggv(3, mask);
+v = ggv(mask, 3);
+ay = ggv(mask, 2);
+ax = ggv(mask, 1);
 
-veh.max_drive = scatteredInterpolant(x', y', z', "linear", "nearest");
+veh.max_drive = scatteredInterpolant(v, ay, ax, "linear", "nearest");
 
-x = ggv(1, ~mask);
-y = ggv(2, ~mask);
-z = ggv(3, ~mask);
+v = ggv(~mask, 3);
+ay = ggv(~mask, 2);
+ax = ggv(~mask, 1);
 
-veh.max_brake = scatteredInterpolant(x', y', z', "linear", "nearest");
+veh.max_brake = scatteredInterpolant(v, ay, ax, "linear", "nearest");
 
 %% Export frequency
 
@@ -319,11 +289,13 @@ function [sim] = simulate(veh,tr,simname,logid)
     
     %% maximum speed curve (assuming pure lateral condition)
 
-    dataPoints = load("GGV_Data.mat").dataPoints;
-    mask = dataPoints(3, :) == 0 & dataPoints(2, :) > 0;
+    mask = veh.ggv(:, 2) > 0;
+    v = veh.ggv(mask, 3);
+    ay = veh.ggv(mask, 2);
+    ax = veh.ggv(mask, 1);
     
-    v_samples = dataPoints(1, mask);
-    Fy_samples = dataPoints(2, mask) .* 9.81 .* veh.m;
+    v_samples = (0:max(v))';
+    Fy_samples = interp2(ax, v, ay, zeros(size(v_samples)), v_samples) .* 9.81 .* veh.m;
     
     %%
 
@@ -734,7 +706,7 @@ end
 function [v,tps,bps] = vehicle_model_lat(veh,r,pp_Fy)
      % speed solution
      if abs(r) < 1e-3 % At strait
-         v = max(veh.ggv(1, :));
+         v = max(veh.ggv(veh.ggv(:, 2) > 0, 3));
      else % Cornering
          r = abs(r);
          f = @(v) (v < 0)*1e6 + ppval(pp_Fy, v) - veh.m*r*v.^2;
