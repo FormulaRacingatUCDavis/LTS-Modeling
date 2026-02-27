@@ -2,12 +2,13 @@ clear; clc; close all;
 
 % configs
 using_feet = false;
-vehicle_file = "FE13_max_aero";
+vehicle_file = "FE13_HDF_MB";
 
 set_baseline = false;
-baseline = load("baselineFE13_max_aero.mat").baseline;
+baseline = load("baselineFE13_HDF_HB.mat").baseline;
 
 carParams = load(vehicle_file).carParams;
+carParams.Cl = carParams.Cl(0);
 GGV_data = load(vehicle_file).GGV_data;
 veh = carParams;
 ggv = GGV_data;
@@ -100,12 +101,16 @@ end
 scores = zeros(length(sims), 1);
 for i = 1:length(sims)
     laptime = sims{i}.laptime.data;
+    disp(laptime)
     scores(i) = calc_autocross_score(laptime, baseline(i));
 end
 
-save("baseline"+vehicle_file, "baseline")
+if set_baseline
+    save("baseline"+vehicle_file, "baseline")
+end
 
 % Calculate the average score across all simulations
+disp(scores)
 averageScore = mean(scores);
 disp(averageScore);
 

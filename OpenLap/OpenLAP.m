@@ -49,16 +49,19 @@ tic
 %% Filenames
 
 % trackfile = 'OpenTRACK_FSAE Skidpad_Closed_Forward.mat' ;
-trackfile = 'bluemax' ;
+trackfile = 'bluemax_drs' ;
 % trackfile = 'OpenTRACK_FSAE Skidpad_Closed_Forward.mat' ;
 % trackfile = 'OpenTRACK_Paul Ricard_Closed_Forward.mat' ;
-vehiclefile = 'FE12_max_aero' ;
+vehiclefile = 'FE13_HDF_HB' ;
+% drs_vehiclefile = 'FE13_LDF_HB' ;
+drs_vehiclefile = '' ;
+
 
 %% Loading circuit
 
 tr = load(trackfile) ;
 tr = tr.TrackInfo;
-tr.info.name = "blue max";
+tr.info.name = trackfile;
 tr.info.config = "Closed";
 tr.r = 1 ./ tr.r;
 tr.dx = [tr.dx; 0.5] .* 0.3048;
@@ -72,9 +75,11 @@ tr.Y = tr.coords(:, 2);
 %% Loading car
 
 veh = load(vehiclefile).carParams;
+veh.Cl = veh.Cl(0);
 ggv = load(vehiclefile).GGV_data;
+
 veh.ggv = ggv;
-veh.name = "FE12";
+veh.name = vehiclefile;
 
 v_max = max(ggv(:, 3));
 ggv = [ggv; [zeros(10, 1), linspace(-2, 2, 10)', ones(10, 1)*(v_max+0.1)]];
@@ -92,6 +97,28 @@ ay = ggv(~mask, 2);
 ax = ggv(~mask, 1);
 
 veh.max_brake = scatteredInterpolant(v, ay, ax, "linear", "nearest");
+
+if ~strcmp(drs_vehiclefile, '')
+    ggv_drs = load(drs_vehiclefile).GGV_data;
+    veh.ggv_drs = ggv_drs;
+    
+    v_max = max(ggv_drs(:, 3));
+    ggv_drs = [ggv_drs; [zeros(10, 1), linspace(-2, 2, 10)', ones(10, 1)*(v_max+0.1)]];
+    
+    mask = ggv_drs(:, 1) >= 0;
+    
+    v = ggv_drs(mask, 3);
+    ay = ggv_drs(mask, 2);
+    ax = ggv_drs(mask, 1);
+    
+    veh.max_drive_drs = scatteredInterpolant(v, ay, ax, "linear", "nearest");
+    
+    v = ggv_drs(~mask, 3);
+    ay = ggv_drs(~mask, 2);
+    ax = ggv_drs(~mask, 1);
+    
+    veh.max_brake_drs = scatteredInterpolant(v, ay, ax, "linear", "nearest");
+end
 
 %% Export frequency
 

@@ -8,22 +8,37 @@ function [sim] = OpenlapSim(veh,tr,simname,logid)
     % HUD
     disp('Simulation started.')
     fprintf(logid,'%s\n','Simulation started.') ;
+
+    sim_drs = isfield(veh, 'ggv_drs');
+    if sim_drs
+        disp("sim drs enabled")
+    end
     
     %% maximum speed curve (assuming pure lateral condition)
 
     mask = veh.ggv(:, 2) > 0 & veh.ggv(:, 1) == 0;
     v = veh.ggv(mask, 3);
     ay = veh.ggv(mask, 2);
+    pp_Ay = pchip(v, ay);
+
+    if sim_drs
+        mask = veh.ggv_drs(:, 2) > 0 & veh.ggv_drs(:, 1) == 0;
+        v = veh.ggv_drs(mask, 3);
+        ay = veh.ggv_drs(mask, 2);
+        pp_Ay_drs = pchip(v, ay);
+    end
     
     %%
-
-    pp_Ay = pchip(v, ay);
     
     v_max = single(zeros(tr.n,1)) ;
     bps_v_max = single(zeros(tr.n,1)) ;
     tps_v_max = single(zeros(tr.n,1)) ;
     for i=1:tr.n
-        [v_max(i),tps_v_max(i),bps_v_max(i)] = vehicle_model_lat(veh,tr.r(i),pp_Ay) ;
+        if sim_drs && tr.drs(i)
+            [v_max(i),tps_v_max(i),bps_v_max(i)] = vehicle_model_lat(veh,tr.r(i),pp_Ay_drs) ;
+        else
+            [v_max(i),tps_v_max(i),bps_v_max(i)] = vehicle_model_lat(veh,tr.r(i),pp_Ay) ;
+        end
     end
     
     mask = veh.ggv(:, 1) > 0 & veh.ggv(:, 2) == 0;
