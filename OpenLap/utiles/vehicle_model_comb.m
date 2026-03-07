@@ -1,4 +1,4 @@
-function [v_next,ax,ay,tps,bps,overshoot] = vehicle_model_comb(veh,tr,v,v_max_next,j,mode)
+function [v_next,ax,ay,tps,bps,overshoot, drs] = vehicle_model_comb(veh,tr,v,v_max_next,j,mode)
     
     %% initialisation
     
@@ -11,6 +11,7 @@ function [v_next,ax,ay,tps,bps,overshoot] = vehicle_model_comb(veh,tr,v,v_max_ne
     bank = tr.bank(j) ;
     g = 9.81 ;
     sim_drs = isfield(veh, 'ggv_drs');
+    drs = false;
     
     %% current lat acc
     
@@ -22,19 +23,23 @@ function [v_next,ax,ay,tps,bps,overshoot] = vehicle_model_comb(veh,tr,v,v_max_ne
     ax_max = mode*(v_max_next^2-v^2)/2/dx ;
 
     %% find ax
-    if sim_drs && tr.drs(j)
-        max_drive = veh.max_drive_drs;
-        max_brake = veh.max_brake_drs;
-    else
-        max_drive = veh.max_drive;
-        max_brake = veh.max_brake;
-    end
-
+  
     if mode == 1
-        ax = max_drive(double(v), double(ay/g))*g;
+        if sim_drs
+            ax_drs = veh.max_drive_drs(double(v), double(ay/g))*g;
+            ax_no_drs = veh.max_drive(double(v), double(ay/g))*g;
+            if ax_drs > ax_no_drs
+                ax = ax_drs;
+                drs = true;
+            else
+                ax = ax_no_drs;
+            end
+        else
+            ax = veh.max_drive(double(v), double(ay/g))*g;
+        end
         ax = min(ax_max, ax);
     else
-        ax = max_brake(double(v), double(ay/g))*g;
+        ax = veh.max_brake(double(v), double(ay/g))*g;
         ax = max(ax_max, ax);
     end
 

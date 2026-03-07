@@ -34,7 +34,7 @@ function [sim] = OpenlapSim(veh,tr,simname,logid)
     bps_v_max = single(zeros(tr.n,1)) ;
     tps_v_max = single(zeros(tr.n,1)) ;
     for i=1:tr.n
-        if sim_drs && tr.drs(i)
+        if false% sim_drs && tr.drs(i)
             [v_max(i),tps_v_max(i),bps_v_max(i)] = vehicle_model_lat(veh,tr.r(i),pp_Ay_drs) ;
         else
             [v_max(i),tps_v_max(i),bps_v_max(i)] = vehicle_model_lat(veh,tr.r(i),pp_Ay) ;
@@ -96,6 +96,7 @@ function [sim] = OpenlapSim(veh,tr,simname,logid)
     ay = single(zeros(tr.n,N,2)) ;
     tps = single(zeros(tr.n,N,2)) ;
     bps = single(zeros(tr.n,N,2)) ;
+    drs = false(tr.n,N,2);
     
     % HUD
     disp('Starting acceleration and deceleration.')
@@ -151,7 +152,7 @@ function [sim] = OpenlapSim(veh,tr,simname,logid)
                     % writing to log file
                     fprintf(logid,'%7d\t%7d\t%7d\t%7.1f\t%7.2f\t%7.2f\n',i,j,k,tr.x(j),v(j,i,k),v_max(j)) ;
                     % calculating speed, accelerations and driver inputs from vehicle model
-                    [v(j_next,i,k),ax(j,i,k),ay(j,i,k),tps(j,i,k),bps(j,i,k),overshoot] = vehicle_model_comb(veh,tr,v(j,i,k),v_max(j_next),j,mode) ;
+                    [v(j_next,i,k),ax(j,i,k),ay(j,i,k),tps(j,i,k),bps(j,i,k),overshoot, drs(j, i, k)] = vehicle_model_comb(veh,tr,v(j,i,k),v_max(j_next),j,mode) ;
                     % checking for limit
                     if overshoot
                         break
@@ -214,6 +215,7 @@ function [sim] = OpenlapSim(veh,tr,simname,logid)
     AY = zeros(tr.n,1) ;
     TPS = zeros(tr.n,1) ;
     BPS = zeros(tr.n,1) ;
+    DRS = false(tr.n, 1);
     % solution selection
     for i=1:tr.n
         IDX = length(v(i,:,1)) ;
@@ -223,11 +225,13 @@ function [sim] = OpenlapSim(veh,tr,simname,logid)
             AY(i) = ay(i,idx,1) ;
             TPS(i) = tps(i,idx,1) ;
             BPS(i) = bps(i,idx,1) ;
+            DRS(i) = drs(i,idx,1) ;
         else % solved in deceleration
             AX(i) = ax(i,idx-IDX,2) ;
             AY(i) = ay(i,idx-IDX,2) ;
             TPS(i) = tps(i,idx-IDX,2) ;
             BPS(i) = bps(i,idx-IDX,2) ;
+            DRS(i) = drs(i,idx-IDX,2) ;
         end
     end
     % HUD
@@ -436,6 +440,9 @@ function [sim] = OpenlapSim(veh,tr,simname,logid)
     % sim.sector_v_max.unit = 'm/s' ;
     % sim.sector_v_min.data = sector_v_min ;
     % sim.sector_v_min.unit = 'm/s' ;
+    sim.drs.data = DRS;
+    sim.drs.unit = "on/off";
+
     % HUD
     disp('Simulation results saved.')
     disp('Simulation completed.')
